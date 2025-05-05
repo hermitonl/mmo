@@ -55,6 +55,8 @@ document.addEventListener('deviceready', function() {
             this.answerTexts = []; // To hold answer text objects
             this.questionText = null; // To hold question text object
             this.timerText = null; // To hold timer text object
+            this.playerScore = 0; // To track player's score
+            this.scoreText = null; // To hold score text object
         }
 
         preload() {
@@ -116,6 +118,13 @@ document.addEventListener('deviceready', function() {
                 fontSize: '20px',
                 fill: '#fff'
             }).setOrigin(1, 0); // Origin top-right
+
+            // --- Score Display ---
+            this.scoreText = this.add.text(20, 20, 'Sats: ' + this.playerScore, {
+                fontSize: '20px',
+                fill: '#fff'
+            }).setOrigin(0, 0); // Origin top-left
+
 
             // --- Controls ---
             this.cursors = this.input.keyboard.createCursorKeys();
@@ -273,6 +282,14 @@ document.addEventListener('deviceready', function() {
 
 
             const isCorrect = playerZoneIndex === this.currentCorrectAnswerIndex;
+
+            if (isCorrect) {
+                // --- Update Score ---
+                const reward = this.quizzes[0].reward || 10; // Get reward, default 10
+                this.playerScore += reward;
+                console.log('Correct! Score:', this.playerScore);
+                this.scoreText.setText('Sats: ' + this.playerScore); // Update score display
+            }
 
             console.log('Player was in zone:', playerZoneIndex, 'Correct zone:', this.currentCorrectAnswerIndex, 'Result:', isCorrect ? 'CORRECT' : 'INCORRECT');
 
