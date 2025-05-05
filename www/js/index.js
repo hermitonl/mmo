@@ -1,4 +1,4 @@
-document.addEventListener('deviceready', function() {
+// deviceready listener removed for web deployment
 
     class GameScene extends Phaser.Scene {
         constructor() {
@@ -579,10 +579,4 @@ document.addEventListener('deviceready', function() {
     // --- Initialize Game ---
     var game = new Phaser.Game(config);
 
-}, false);
-
-// Fallback for running in browser without Cordova
-if (!window.cordova) {
-    const event = new Event('deviceready');
-    document.dispatchEvent(event);
-}
+// deviceready listener and fallback removed for web deployment
