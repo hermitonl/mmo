@@ -6,14 +6,32 @@ document.addEventListener('deviceready', function() {
             this.player = null;
             this.cursors = null;
 
+            // --- Lesson Data ---
+            this.lessons = [
+                {
+                    id: 'lesson0',
+                    title: 'What are Sats?',
+                    content: 'Sats, short for Satoshis, are the smallest unit of Bitcoin. 1 Bitcoin = 100,000,000 Sats.',
+                    reward: 5 // Example reward
+                }
+                // Add more lessons here
+            ];
+
+            // --- NPC Data ---
+             this.npcs = [
+                { id: 'npc1', type: 'knowledge', dataId: 'lesson0', x: 200, y: 200, spriteKey: 'npc_knowledge', sprite: null }, // Added sprite property
+                { id: 'npc2', type: 'quiz', dataId: 'quiz4', x: 600, y: 200, spriteKey: 'npc_quiz', sprite: null } // Added sprite property
+            ];
+
+
             // --- Quiz Data ---
             // Using quiz4 (Bitcoin Basics) as the initial quiz data
             this.quizzes = [
                 {
                     id: 'quiz4',
                     topic: 'Bitcoin Basics',
-                    cost: 10, // Example cost
-                    reward: 50, // Example reward
+                    cost: 1, // Example cost
+                    reward: 1, // Example reward
                     questions: [
                         {
                             q: 'What is the maximum supply of Bitcoin?',
@@ -57,11 +75,25 @@ document.addEventListener('deviceready', function() {
             this.timerText = null; // To hold timer text object
             this.playerScore = 0; // To track player's score
             this.scoreText = null; // To hold score text object
+            this.completedLessons = new Set(); // Track completed lessons
+
+            // --- NPC Interaction State ---
+            this.interactKey = null;
+            this.closestNpc = null;
+            this.interactionPromptText = null;
+            this.showingKnowledgeUI = false;
+            this.showingQuizPromptUI = false;
+            this.currentNpcInteraction = null; // Store the npc object being interacted with
+            this.knowledgeContainer = null; // UI Container for knowledge
+            this.quizPromptContainer = null; // UI Container for quiz prompt
         }
 
         preload() {
             // Load player image (using logo.png as placeholder)
             this.load.image('player', 'img/logo.png');
+            // Load NPC placeholder images
+            this.load.image('npc_knowledge', 'img/logo.png'); // Placeholder
+            this.load.image('npc_quiz', 'img/logo.png'); // Placeholder
         }
 
         create() {
@@ -69,6 +101,15 @@ document.addEventListener('deviceready', function() {
             this.player = this.physics.add.sprite(400, 300, 'player');
             this.player.setCollideWorldBounds(true);
             this.player.body.setSize(28, 32); // Adjust as needed
+
+            // --- Spawn NPCs ---
+            this.npcs.forEach(npc => {
+                const npcSprite = this.physics.add.staticSprite(npc.x, npc.y, npc.spriteKey);
+                npc.sprite = npcSprite; // Store sprite reference
+                npcSprite.body.setSize(28, 32); // Set explicit physics size, matching player for consistency
+                npcSprite.body.immovable = true; // Make NPC immovable
+                this.physics.add.collider(this.player, npcSprite); // Add collision
+            });
 
             // --- UI Text Elements ---
             this.questionText = this.add.text(400, 50, 'Loading question...', {
@@ -128,39 +169,128 @@ document.addEventListener('deviceready', function() {
 
             // --- Controls ---
             this.cursors = this.input.keyboard.createCursorKeys();
+            this.interactKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E); // Added interact key listener
+
+            // --- Interaction Prompt Text ---
+            this.interactionPromptText = this.add.text(this.player.x, this.player.y - 30, 'Press E', {
+                fontSize: '12px',
+                fill: '#fff',
+                backgroundColor: 'rgba(0,0,0,0.7)', // Added background for visibility
+                padding: { x: 5, y: 2 }
+            }).setOrigin(0.5).setVisible(false);
+
+            // --- Knowledge UI Container ---
+            const knowledgeBg = this.add.rectangle(400, 300, 500, 300, 0x000033, 0.9).setStrokeStyle(2, 0xffffff);
+            const knowledgeTitle = this.add.text(400, 180, 'Lesson Title', { fontSize: '20px', fill: '#fff' }).setOrigin(0.5);
+            const knowledgeContent = this.add.text(400, 280, 'Lesson content goes here.', { fontSize: '16px', fill: '#fff', wordWrap: { width: 480 }, align: 'center' }).setOrigin(0.5);
+            const knowledgeClose = this.add.text(400, 420, '[Press E to Close]', { fontSize: '14px', fill: '#aaa' }).setOrigin(0.5);
+            this.knowledgeContainer = this.add.container(0, 0, [knowledgeBg, knowledgeTitle, knowledgeContent, knowledgeClose]);
+            this.knowledgeContainer.setVisible(false);
+
+            // --- Quiz Prompt UI Container ---
+            const quizPromptBg = this.add.rectangle(400, 300, 400, 250, 0x330000, 0.9).setStrokeStyle(2, 0xffffff);
+            const quizPromptTitle = this.add.text(400, 210, 'Quiz Challenge!', { fontSize: '20px', fill: '#fff' }).setOrigin(0.5);
+            const quizPromptTopic = this.add.text(400, 250, 'Topic: Bitcoin Basics', { fontSize: '16px', fill: '#fff' }).setOrigin(0.5);
+            const quizPromptCost = this.add.text(400, 280, 'Cost: 1 Sats', { fontSize: '16px', fill: '#ffcc00' }).setOrigin(0.5);
+            const quizPromptStart = this.add.text(400, 330, '[Press E to Start]', { fontSize: '14px', fill: '#aaa' }).setOrigin(0.5);
+            const quizPromptClose = this.add.text(400, 360, '[Move Away to Cancel]', { fontSize: '12px', fill: '#aaa' }).setOrigin(0.5); // Added cancel instruction
+            this.quizPromptContainer = this.add.container(0, 0, [quizPromptBg, quizPromptTitle, quizPromptTopic, quizPromptCost, quizPromptStart, quizPromptClose]);
+            this.quizPromptContainer.setVisible(false);
+
 
             // --- Load Initial Question ---
-            this.loadQuestion(0, 0); // Load the first question of the first quiz
+            // this.loadQuestion(0, 0); // REMOVED - Quiz now starts via NPC interaction
         }
 
         update() {
             const speed = 160;
+            const interactionRange = 50; // Max distance to show interaction prompt
+            const uiCloseRange = 100; // Max distance before UI closes automatically
 
-            // Only allow movement if the quiz is active
-            if (this.quizIsActive) {
-                // Reset velocity
-                this.player.setVelocity(0);
+            // --- Interaction Logic ---
+            let currentClosestNpc = null; // Use a temporary variable for this frame's check
 
-                // Player Movement (4-Directional Top-Down)
-                if (this.cursors.left.isDown) {
-                    this.player.setVelocityX(-speed);
-                } else if (this.cursors.right.isDown) {
-                    this.player.setVelocityX(speed);
-                }
+            if (!this.showingKnowledgeUI && !this.showingQuizPromptUI && !this.quizIsActive) { // Only check for new interactions if no UI is open and quiz isn't running
+                 let minDist = interactionRange;
+                 this.npcs.forEach(npc => {
+                    if (npc.sprite) { // Ensure sprite exists
+                        const distance = Phaser.Math.Distance.Between(this.player.x, this.player.y, npc.sprite.x, npc.sprite.y);
+                        if (distance < minDist) {
+                            minDist = distance;
+                            currentClosestNpc = npc; // Update temp variable
+                        }
+                    }
+                });
+                 // Update the main state variable ONLY if we were actively checking
+                 this.closestNpc = currentClosestNpc;
+            }
+            // If UI is showing or quiz is active, this.closestNpc retains its value from the last valid check
 
-                if (this.cursors.up.isDown) {
-                    this.player.setVelocityY(-speed);
-                } else if (this.cursors.down.isDown) {
-                    this.player.setVelocityY(speed);
-                }
 
-                // Normalize and scale the velocity
-                this.player.body.velocity.normalize().scale(speed);
+            // Show/Hide Interaction Prompt (Based on the potentially updated this.closestNpc)
+            if (this.closestNpc && !this.showingKnowledgeUI && !this.showingQuizPromptUI && !this.quizIsActive) {
+                this.interactionPromptText.setPosition(this.player.x, this.player.y - 30).setVisible(true);
             } else {
-                 // Stop player if quiz is not active
-                 this.player.setVelocity(0);
+                this.interactionPromptText.setVisible(false);
+            }
+
+            // Handle 'E' Key Press
+            const justPressedE = Phaser.Input.Keyboard.JustDown(this.interactKey);
+
+            if (justPressedE) {
+                if (this.showingQuizPromptUI && this.currentNpcInteraction) {
+                    // Attempt to start the quiz
+                    this.startQuiz(this.currentNpcInteraction.dataId);
+                } else if (this.showingKnowledgeUI) {
+                     // Close knowledge UI
+                     this.hideAllNpcUI();
+                } else if (this.closestNpc) {
+                    // Initiate interaction with the closest NPC
+                    this.handleNpcInteraction(this.closestNpc);
+                } else {
+                    // Optional: Log if E is pressed with no target, if needed for future debugging
+                    // console.log("'E' pressed but no interaction target.");
+                }
+            }
+
+            // --- UI Auto-Close Logic ---
+            if ((this.showingKnowledgeUI || this.showingQuizPromptUI) && this.currentNpcInteraction && this.currentNpcInteraction.sprite) {
+                 const distanceToCurrentNpc = Phaser.Math.Distance.Between(
+                     this.player.x, this.player.y,
+                     this.currentNpcInteraction.sprite.x, this.currentNpcInteraction.sprite.y
+                 );
+                 if (distanceToCurrentNpc > uiCloseRange) {
+                     this.hideAllNpcUI();
+                 }
+            }
+
+
+            // --- Player Movement ---
+            // Player movement is always allowed based on input keys.
+            // Quiz logic (checkAnswer) and UI logic handle states where movement might be implicitly stopped or consequences occur.
+
+            // Reset velocity
+            this.player.setVelocity(0);
+
+            // Player Movement (4-Directional Top-Down)
+            if (this.cursors.left.isDown) {
+                this.player.setVelocityX(-speed);
+            } else if (this.cursors.right.isDown) {
+                this.player.setVelocityX(speed);
+            }
+
+            if (this.cursors.up.isDown) {
+                this.player.setVelocityY(-speed);
+            } else if (this.cursors.down.isDown) {
+                this.player.setVelocityY(speed);
+            }
+
+            // Normalize and scale the velocity if moving
+            if (this.player.body.velocity.x !== 0 || this.player.body.velocity.y !== 0) {
+                 this.player.body.velocity.normalize().scale(speed);
             }
         }
+
 
         // --- Load Question Function ---
         loadQuestion(quizIndex, questionIndex) {
@@ -237,7 +367,7 @@ document.addEventListener('deviceready', function() {
         tickTimer() {
             this.remainingTime--;
             this.timerText.setText('Time: ' + this.remainingTime);
-             console.log("Timer tick:", this.remainingTime);
+             // console.log("Timer tick:", this.remainingTime); // Removed debug log
 
             if (this.remainingTime <= 0) {
                 console.log("Timer expired!");
@@ -317,6 +447,112 @@ document.addEventListener('deviceready', function() {
                      // TODO: Add logic for what happens after the quiz (e.g., return to map, show score)
                  }
              });
+        }
+        // --- NPC Interaction Handling ---
+        handleNpcInteraction(npc) {
+            this.currentNpcInteraction = npc;
+            this.interactionPromptText.setVisible(false); // Hide prompt immediately
+
+            if (npc.type === 'knowledge') {
+                this.showKnowledgeUI(npc.dataId);
+            } else if (npc.type === 'quiz') {
+                this.showQuizPromptUI(npc.dataId);
+            }
+        }
+
+        showKnowledgeUI(lessonId) {
+            const lesson = this.lessons.find(l => l.id === lessonId);
+            if (!lesson) {
+                console.error("Lesson not found:", lessonId);
+                return;
+            }
+
+            // Update UI elements (assuming container children order: bg, title, content, close)
+            this.knowledgeContainer.getAt(1).setText(lesson.title); // Update title
+            this.knowledgeContainer.getAt(2).setText(lesson.content); // Update content
+
+            this.knowledgeContainer.setVisible(true);
+            this.showingKnowledgeUI = true;
+
+            // Award score/sats if lesson not completed before
+            if (!this.completedLessons.has(lessonId)) {
+                const reward = lesson.reward || 0;
+                this.playerScore += reward;
+                this.scoreText.setText('Sats: ' + this.playerScore);
+                this.completedLessons.add(lessonId);
+                // Optional: Add a temporary text effect for reward
+                 const rewardText = this.add.text(this.player.x, this.player.y - 50, `+${reward} Sats!`, { fontSize: '16px', fill: '#00ff00' }).setOrigin(0.5);
+                 this.tweens.add({
+                     targets: rewardText,
+                     y: rewardText.y - 30,
+                     alpha: 0,
+                     duration: 1500,
+                     ease: 'Power1',
+                     onComplete: () => { rewardText.destroy(); }
+                 });
+            } else {
+                 // Optional: console.log(`Lesson '${lessonId}' already completed.`);
+            }
+        }
+
+        showQuizPromptUI(quizId) {
+            const quiz = this.quizzes.find(q => q.id === quizId);
+            if (!quiz) {
+                console.error("Quiz not found for prompt:", quizId); // Keep error logs
+                return;
+            }
+
+            // Update UI elements (assuming container children order: bg, title, topic, cost, start, close)
+            this.quizPromptContainer.getAt(2).setText(`Topic: ${quiz.topic}`); // Update topic
+            this.quizPromptContainer.getAt(3).setText(`Cost: ${quiz.cost} Sats`); // Update cost
+
+            this.quizPromptContainer.setVisible(true);
+            this.showingQuizPromptUI = true;
+        }
+
+        hideAllNpcUI() {
+            this.knowledgeContainer.setVisible(false);
+            this.quizPromptContainer.setVisible(false);
+            this.showingKnowledgeUI = false;
+            this.showingQuizPromptUI = false;
+            this.currentNpcInteraction = null;
+        }
+
+        startQuiz(quizId) {
+            const quiz = this.quizzes.find(q => q.id === quizId);
+            if (!quiz) {
+                console.error("Quiz data not found for starting:", quizId); // Keep error logs
+                return;
+            }
+
+            const cost = quiz.cost || 0;
+
+            if (this.playerScore >= cost) {
+                // Deduct cost
+                this.playerScore -= cost;
+                this.scoreText.setText('Sats: ' + this.playerScore);
+
+                // Hide prompt UI
+                this.hideAllNpcUI();
+
+                // Find the index of the quiz in the main array
+                const quizIndex = this.quizzes.findIndex(q => q.id === quizId);
+                if (quizIndex === -1) {
+                     console.error("Could not find index for quiz:", quizId); // Keep error logs
+                     return; // Should not happen if quiz was found earlier
+                }
+
+                // Reset question index and load first question
+                this.currentQuizQuestionIndex = 0;
+                this.loadQuestion(quizIndex, 0);
+
+            } else {
+                // Optional: Show temporary "Not enough Sats" message
+                const insufficientText = this.add.text(400, 400, 'Not enough Sats!', { fontSize: '18px', fill: '#ff0000', backgroundColor: 'rgba(0,0,0,0.7)' }).setOrigin(0.5);
+                this.time.delayedCall(1500, () => {
+                    insufficientText.destroy();
+                });
+            }
         }
     }
 
