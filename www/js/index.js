@@ -37,6 +37,7 @@ document.addEventListener('deviceready', function() {
             this.player.setBounce(0.2);
             this.player.setCollideWorldBounds(true); // Prevent falling off sides
             this.player.setGravityY(300); // Apply gravity
+this.player.body.setSize(28, 32); // Make physics body slightly narrower
 
             // --- Collisions ---
             this.physics.add.collider(this.player, this.platforms);
