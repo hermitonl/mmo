@@ -2,7 +2,7 @@
 
 ![screenshot](screenshot.png)
 
-A starter template for building mobile games using Phaser 3 and Apache Cordova.
+A starter template for building mobile games using Phaser 3 and Apache Cordova, based on [Creating Mobile Games with Phaser 3 and Cordova](https://gamedevacademy.org/creating-mobile-games-with-phaser-3-and-cordova/).
 
 ## Project Structure
 
