@@ -4,13 +4,51 @@ document.addEventListener('deviceready', function() {
         constructor() {
             super({ key: 'GameScene' });
             this.player = null;
-            // Removed platforms as it's not used in top-down
             this.cursors = null;
+
+            // --- Quiz Data ---
+            // Using quiz4 (Bitcoin Basics) as the initial quiz data
+            this.quizzes = [
+                {
+                    id: 'quiz4',
+                    topic: 'Bitcoin Basics',
+                    cost: 10, // Example cost
+                    reward: 50, // Example reward
+                    questions: [
+                        {
+                            q: 'What is the maximum supply of Bitcoin?',
+                            a: ['21 million', '100 million', '1 billion', 'Unlimited'],
+                            correct: '21 million',
+                            duration: 15 // Optional: Time limit per question
+                        },
+                        {
+                            q: 'Who is the pseudonymous creator of Bitcoin?',
+                            a: ['Vitalik Buterin', 'Satoshi Nakamoto', 'Elon Musk', 'Craig Wright'],
+                            correct: 'Satoshi Nakamoto',
+                            duration: 15
+                        },
+                        {
+                            q: 'What is the approximate block time for Bitcoin?',
+                            a: ['1 minute', '10 minutes', '1 hour', '1 day'],
+                            correct: '10 minutes',
+                            duration: 15
+                        },
+                        {
+                            q: 'What consensus mechanism does Bitcoin use?',
+                            a: ['Proof of Stake', 'Proof of Authority', 'Proof of Work', 'Proof of Burn'],
+                            correct: 'Proof of Work',
+                            duration: 15
+                        }
+                    ]
+                }
+                // Add more quizzes here if needed
+            ];
 
             // --- Quiz State Variables ---
             this.quizIsActive = false;
             this.currentQuestionData = null; // Will hold { q: '...', a: [...], correct: '...' }
             this.currentCorrectAnswerIndex = -1; // Index (0-3) of the correct answer
+            this.currentQuizQuestionIndex = 0; // Index of the current question within the selected quiz
             this.timerEvent = null; // To hold the Phaser TimerEvent
             this.remainingTime = 0;
             this.answerZones = []; // To hold Phaser.Geom.Rectangle objects
@@ -22,7 +60,6 @@ document.addEventListener('deviceready', function() {
         preload() {
             // Load player image (using logo.png as placeholder)
             this.load.image('player', 'img/logo.png');
-            // No specific platform image needed for now
         }
 
         create() {
@@ -32,7 +69,7 @@ document.addEventListener('deviceready', function() {
             this.player.body.setSize(28, 32); // Adjust as needed
 
             // --- UI Text Elements ---
-            this.questionText = this.add.text(400, 50, 'Question text will appear here', {
+            this.questionText = this.add.text(400, 50, 'Loading question...', {
                 fontSize: '24px',
                 fill: '#fff',
                 align: 'center',
@@ -72,8 +109,6 @@ document.addEventListener('deviceready', function() {
 
                 const answerText = this.add.text(pos.textX, answerY, String.fromCharCode(65 + index), answerStyle).setOrigin(0.5);
                 this.answerTexts.push(answerText);
-                // Explicitly disable physics for text if needed (usually not necessary unless added to physics group)
-                // if (answerText.body) { answerText.body.setEnable(false); }
             });
 
 
@@ -85,19 +120,8 @@ document.addEventListener('deviceready', function() {
             // --- Controls ---
             this.cursors = this.input.keyboard.createCursorKeys();
 
-            // --- Placeholder Quiz Start ---
-            this.currentQuestionData = { q: 'What is the capital of France?', a: ['London', 'Paris', 'Berlin', 'Madrid'], correct: 'Paris' };
-            this.currentCorrectAnswerIndex = this.currentQuestionData.a.indexOf(this.currentQuestionData.correct); // Should be 1
-
-            // Update UI with placeholder data
-            this.questionText.setText(this.currentQuestionData.q);
-            this.answerTexts.forEach((text, index) => {
-                text.setText(`${String.fromCharCode(65 + index)}: ${this.currentQuestionData.a[index]}`);
-            });
-
-            this.startQuestionTimer(15); // Start a 15-second timer
-            this.quizIsActive = true;
-            // --- End Placeholder ---
+            // --- Load Initial Question ---
+            this.loadQuestion(0, 0); // Load the first question of the first quiz
         }
 
         update() {
@@ -128,6 +152,58 @@ document.addEventListener('deviceready', function() {
                  this.player.setVelocity(0);
             }
         }
+
+        // --- Load Question Function ---
+        loadQuestion(quizIndex, questionIndex) {
+            console.log(`Loading quiz ${quizIndex}, question ${questionIndex}`);
+            // Select the quiz data
+            const quiz = this.quizzes[quizIndex];
+            if (!quiz) {
+                console.error(`Quiz with index ${quizIndex} not found.`);
+                this.questionText.setText('Error: Quiz not found.');
+                this.quizIsActive = false;
+                return;
+            }
+
+            // Get the specific question data
+            const questionData = quiz.questions[questionIndex];
+            if (!questionData) {
+                console.error(`Question with index ${questionIndex} not found in quiz ${quizIndex}.`);
+                this.questionText.setText('Error: Question not found.');
+                this.quizIsActive = false;
+                return;
+            }
+
+            // Store current question data and correct answer index
+            this.currentQuestionData = questionData;
+            this.currentCorrectAnswerIndex = questionData.a.indexOf(questionData.correct);
+            if (this.currentCorrectAnswerIndex === -1) {
+                 console.error(`Correct answer "${questionData.correct}" not found in options:`, questionData.a);
+                 // Handle error appropriately, maybe skip question or show an error message
+                 this.questionText.setText('Error: Invalid question data.');
+                 this.quizIsActive = false;
+                 return;
+            }
+
+            // Update UI
+            this.questionText.setText(questionData.q);
+            this.answerTexts.forEach((text, index) => {
+                if (questionData.a[index] !== undefined) {
+                    text.setText(`${String.fromCharCode(65 + index)}: ${questionData.a[index]}`);
+                } else {
+                    text.setText(`${String.fromCharCode(65 + index)}: -`); // Handle cases with fewer than 4 answers
+                }
+            });
+
+            // Reset background color and start timer
+            this.cameras.main.setBackgroundColor('#000000');
+            this.startQuestionTimer(questionData.duration || 15); // Use question duration or default to 15s
+
+            // Set quiz active state
+            this.quizIsActive = true;
+            console.log("Question loaded, quiz active.");
+        }
+
 
         // --- Quiz Timer Functions ---
         startQuestionTimer(durationSeconds) {
@@ -160,7 +236,7 @@ document.addEventListener('deviceready', function() {
                      this.timerEvent.remove(false); // Stop the timer event
                      this.timerEvent = null; // Clear the reference
                 }
-                this.checkAnswer();
+                this.checkAnswer(); // Check answer when time runs out
             }
         }
 
@@ -168,6 +244,14 @@ document.addEventListener('deviceready', function() {
         checkAnswer() {
             console.log("Checking answer...");
             this.quizIsActive = false; // Stop movement, end the round temporarily
+
+            // Stop the timer if it's still running (e.g., player moved into zone before time expired)
+            if (this.timerEvent) {
+                this.timerEvent.remove(false);
+                this.timerEvent = null;
+                console.log("Timer stopped manually during checkAnswer.");
+            }
+
 
             const playerX = this.player.x;
             const playerY = this.player.y;
@@ -181,20 +265,40 @@ document.addEventListener('deviceready', function() {
                 }
             }
 
+            // If time expired, playerZoneIndex might still be -1 if they weren't in a zone
+            if (this.remainingTime <= 0 && playerZoneIndex === -1) {
+                 console.log("Time expired, player not in any zone.");
+                 // Treat as incorrect if time runs out and player isn't in a zone
+            }
+
+
             const isCorrect = playerZoneIndex === this.currentCorrectAnswerIndex;
 
             console.log('Player was in zone:', playerZoneIndex, 'Correct zone:', this.currentCorrectAnswerIndex, 'Result:', isCorrect ? 'CORRECT' : 'INCORRECT');
 
-            // TODO: Add logic for what happens next (e.g., show result, load next question)
-            // For now, just log and stop. Maybe change background color?
+            // Show feedback
              this.cameras.main.setBackgroundColor(isCorrect ? '#008000' : '#800000'); // Green for correct, Red for incorrect
-             // After a delay, maybe reset or start next question
+
+             // After a delay, load the next question or end the quiz
              this.time.delayedCall(2000, () => {
                  this.cameras.main.setBackgroundColor('#000000'); // Reset background
-                 // Potentially start a new question here in the future
-                 console.log("Ready for next question (not implemented yet)");
-                 // For now, keep quiz inactive
-                 // this.quizIsActive = true; // Re-enable movement if needed for next round
+
+                 this.currentQuizQuestionIndex++; // Move to the next question index
+
+                 // Check if there are more questions in the current quiz (assuming quiz index 0 for now)
+                 const currentQuiz = this.quizzes[0]; // Assuming we are always on the first quiz for now
+                 if (this.currentQuizQuestionIndex < currentQuiz.questions.length) {
+                     // Load the next question
+                     this.loadQuestion(0, this.currentQuizQuestionIndex);
+                 } else {
+                     // Quiz finished
+                     console.log("Quiz finished!");
+                     this.questionText.setText('Quiz Finished!');
+                     this.answerTexts.forEach(text => text.setText('')); // Clear answer texts
+                     this.timerText.setText(''); // Clear timer text
+                     this.quizIsActive = false; // Keep quiz inactive
+                     // TODO: Add logic for what happens after the quiz (e.g., return to map, show score)
+                 }
              });
         }
     }
