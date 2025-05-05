@@ -1,8 +1,17 @@
-# Phaser 3 Cordova Starter Template
+# Top-Down Bitcoin Quiz Game (Phaser 3 + Cordova)
 
 ![screenshot](screenshot.png)
 
-A starter template for building mobile games using Phaser 3 and Apache Cordova, based on [Creating Mobile Games with Phaser 3 and Cordova](https://gamedevacademy.org/creating-mobile-games-with-phaser-3-and-cordova/).
+A top-down Bitcoin quiz game built using Phaser 3 and Apache Cordova for the Amazon Q Developer Challenge. Learn about Bitcoin concepts and test your knowledge!
+## Amazon Q Developer Challenge Context
+
+This project aims to address multiple facets of the Amazon Q Developer Challenge:
+
+*   **Prompt 1: Crushing the Command Line:** While not fully implemented in this initial version, the development workflow presents opportunities to leverage command-line automation. Future iterations could explore using tools like the Amazon Q Developer CLI to generate build scripts, automate repetitive Cordova commands (platform adding, building, running), analyze code for improvements, or even assist in generating documentation snippets. This project serves as a foundation for exploring how AI-powered CLI tools can streamline mobile game development.
+
+*   **Prompt 2: That's Entertainment!:** This project directly tackles the "That's Entertainment!" prompt. It's designed as an educational game, blending the fun of top-down exploration and timed quizzes with the practical goal of learning about Bitcoin concepts. The interactive nature aims to make learning more engaging than traditional methods.
+
+*   **Prompt 3: Exploring the Possibilities:** The game represents an exploration into creating interactive educational experiences on the Cordova platform. It combines established game mechanics (character movement, NPC interaction, timed challenges) with specific educational content delivery (lessons, quizzes). This fusion explores the potential of using game development frameworks like Phaser within a cross-platform mobile wrapper like Cordova for novel learning applications. Furthermore, the development process itself highlights how AI assistants like Amazon Q can accelerate the creation of such unique projects by helping with code generation, debugging, and exploring different implementation possibilities.
 
 ## Project Structure
 
@@ -12,6 +21,20 @@ A brief overview of the key directories:
 *   `res/`: Contains platform-specific resources like icons and splash screens.
 *   `hooks/`: Contains scripts that can be hooked into Cordova commands.
 *   `config.xml`: The main configuration file for the Cordova application.
+
+## Gameplay
+
+*   **Movement:** Navigate the game world using the Arrow Keys.
+*   **Interaction:** Approach NPCs (Non-Player Characters) and press the 'E' key when the interaction prompt appears.
+*   **Knowledge NPCs:** These NPCs provide educational lessons about Bitcoin. Interacting with them displays the lesson content and awards you with Satoshis (Sats).
+*   **Quiz NPCs:** These NPCs offer quizzes on specific Bitcoin topics. Interacting initially shows a prompt with the topic and the Sat cost to attempt the quiz. Press 'E' again to accept and start the quiz (Sats will be deducted).
+*   **Quiz Mechanics:** During a quiz, a question and multiple-choice answers (A, B, C, D) are displayed. A timer starts counting down. Move your player character into the zone corresponding to the correct answer before the timer expires.
+*   **Scoring:** Earn Sats for each correctly answered quiz question.
+
+## Controls
+
+*   **Arrow Keys:** Move Player
+*   **E Key:** Interact with NPCs / Start Quiz
 
 ## Prerequisites
 
