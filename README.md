@@ -3,6 +3,11 @@
 ![screenshot](screenshot.png)
 
 A top-down Bitcoin quiz game built using Phaser 3 and Apache Cordova for the Amazon Q Developer Challenge. Learn about Bitcoin concepts and test your knowledge!
+
+## Play Online
+
+Play the latest version online: https://play.hermit.onl/ | [backup](https://phaser-beta.vercel.app/)
+
 ## Amazon Q Developer Challenge Context
 
 This project aims to address multiple facets of the Amazon Q Developer Challenge:
@@ -75,7 +80,9 @@ Follow these steps to set up the project:
 
 ## Usage
 
-**Running the Development Server:**
+**Running Locally (Cordova):**
+
+This method is primarily for local development and testing, especially if you plan to test Cordova-specific features or build for native platforms later.
 
 To run the project in your browser with live-reloading enabled:
 
@@ -84,6 +91,28 @@ cordova run browser --live-reload
 ```
 
 This command will start a local web server. Check the terminal output for the exact URL (often `http://localhost:3000` or similar, not necessarily port 8000). Open this URL in your browser to see the game.
+
+## Vercel Deployment
+
+This project is configured for easy deployment to Vercel. The `vercel.json` file specifies the following:
+
+*   **Build Configuration:** It uses the `@vercel/static` builder to serve the contents of the `www/` directory as static assets.
+*   **Routing:** All incoming requests are rewritten to serve files from the `www/` directory, ensuring that the game's `index.html` and other assets are correctly accessed.
+
+```json
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "www/**",
+      "use": "@vercel/static"
+    }
+  ],
+  "routes": [
+    { "src": "/(.*)", "dest": "/www/$1" }
+  ]
+}
+```
 
 **Building for Platforms:**
 
