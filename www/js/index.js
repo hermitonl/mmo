@@ -89,11 +89,11 @@ document.addEventListener('deviceready', function() {
         }
 
         preload() {
-            // Load player image (using logo.png as placeholder)
-            this.load.image('player', 'img/logo.png');
+            // Load player image (using player-small.png as placeholder)
+            this.load.image('player', 'img/player-small.png');
             // Load NPC placeholder images
-            this.load.image('npc_knowledge', 'img/logo.png'); // Placeholder
-            this.load.image('npc_quiz', 'img/logo.png'); // Placeholder
+            this.load.image('npc_knowledge', 'img/cordova-small.png'); // Placeholder
+            this.load.image('npc_quiz', 'img/cordova-small.png'); // Placeholder
         }
 
         create() {
