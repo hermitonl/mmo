@@ -23,8 +23,12 @@ Ready to test your Bitcoin knowledge? Play the latest version here:
 
 ## Gameplay Deep Dive
 
-*   **Movement:** Navigate the vibrant game world using the **Arrow Keys**.
-*   **Interaction:** Approach Non-Player Characters (NPCs) and press the **'E' key** when the interaction prompt appears.
+*   **Movement:**
+    *   **Desktop:** Navigate the vibrant game world using the **Arrow Keys**.
+    *   **Mobile/Touch Devices:** Use the **on-screen D-pad** (directional buttons) located at the bottom-left of the screen.
+*   **Interaction:**
+    *   **Desktop:** Approach Non-Player Characters (NPCs) and press the **'E' key** when the interaction prompt appears.
+    *   **Mobile/Touch Devices:** Approach NPCs and tap the **on-screen interact button** (target icon) located at the bottom-right of the screen.
 *   **Knowledge NPCs:** These friendly characters provide bite-sized, easy-to-understand lessons about various Bitcoin topics. Completing a lesson rewards you with Satoshis (Sats).
 *   **Quiz NPCs:** Feeling confident? These NPCs offer quizzes on specific Bitcoin subjects. Interacting will show the topic and the Sat cost to attempt the quiz. Press 'E' again to accept the challenge (Sats will be deducted).
 *   **Dynamic Quiz Mechanics:** Once a quiz starts, a question with multiple-choice answers (A, B, C, D) is displayed alongside a countdown timer. Your mission? Move your player character into the physical zone on the map corresponding to the correct answer before time runs out!
@@ -116,7 +120,40 @@ For a comprehensive understanding of the AI collaboration strategy, please refer
 
 ## Running the Game
 
-**1. Locally with Cordova (for browser or device testing):**
+**1. Directly Opening `www/index.html` (Quick Web Preview):**
+
+For a very quick preview of the Phaser game logic without Cordova wrappers, you can often open the `www/index.html` file directly in a modern web browser. However, some browser security features (like CORS for local file access) might affect asset loading. Running through a local server (even a simple one like `python -m http.server` from the `www` directory) or using Cordova's serve/run commands is generally more reliable.
+
+**2. Accessing from Mobile on Local Network (macOS Example):**
+
+To play the game on your smartphone or another device on the same Wi-Fi network, you'll need your Mac's local IP address.
+
+*   **Find Your Mac's IP Address:**
+    Open Terminal on your Mac and run:
+    ```bash
+    ipconfig getifaddr en0
+    ```
+    This command usually shows the IP address for your Wi-Fi connection (e.g., `192.168.0.192`). If `en0` doesn't work, you might be on a different interface (e.g., `en1` for Wi-Fi if `en0` is Ethernet).
+
+*   **Start the Game with Cordova Live Reload:**
+    In your project directory, run:
+    ```bash
+    cordova run browser --live-reload
+    ```
+    Note the port number Cordova uses (often 3000 or 8000, check the terminal output).
+
+*   **Connect from Your Smartphone:**
+    Open a web browser on your smartphone and go to:
+    ```
+    http://YOUR_MAC_IP_ADDRESS:PORT_NUMBER
+    ```
+    For example, if your Mac's IP is `192.168.0.192` and Cordova is using port `8000`, you would enter:
+    ```
+    http://192.168.0.192:8000
+    ```
+    Ensure your smartphone and Mac are connected to the same Wi-Fi network.
+
+**3. Locally with Cordova (for browser or device testing):**
 
 This method allows you to test Cordova features and prepare for native builds.
 
@@ -130,10 +167,6 @@ This method allows you to test Cordova features and prepare for native builds.
     ```bash
     cordova run android
     ```
-
-**2. Directly Opening `www/index.html` (Quick Web Preview):**
-
-For a very quick preview of the Phaser game logic without Cordova wrappers, you can often open the `www/index.html` file directly in a modern web browser. However, some browser security features (like CORS for local file access) might affect asset loading. Running through a local server (even a simple one like `python -m http.server` from the `www` directory) or using Cordova's serve/run commands is generally more reliable.
 
 ## Vercel Deployment
 
