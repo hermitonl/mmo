@@ -59,4 +59,4 @@ app.get('/api', (req, res) => {
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => console.log(`Server listening on port ${PORT}`));
 
-module.exports = app; // Export the Express app for Vercel
+module.exports = server; // Export the HTTP server instance for Vercel
