@@ -5,6 +5,25 @@
             super({ key: 'GameScene' });
             this.player = null;
             this.cursors = null;
+            this.interactKey = null; // Will be defined in create
+
+            // --- Touch Control Flags/Refs ---
+            this.isTouchDevice = false;
+            this.dpad = {
+                up: null,
+                down: null,
+                left: null,
+                right: null,
+                interact: null
+            };
+            this.touchFlags = {
+                up: false,
+                down: false,
+                left: false,
+                right: false,
+                interactPressed: false // For single press detection
+            };
+
 
             // --- Lesson Data ---
             this.lessons = [
@@ -78,7 +97,7 @@
             this.completedLessons = new Set(); // Track completed lessons
 
             // --- NPC Interaction State ---
-            this.interactKey = null;
+            // this.interactKey is already defined above
             this.closestNpc = null;
             this.interactionPromptText = null;
             this.showingKnowledgeUI = false;
@@ -94,6 +113,8 @@
             // Load NPC placeholder images
             this.load.image('npc_knowledge', 'img/cordova-small.png'); // Placeholder
             this.load.image('npc_quiz', 'img/cordova-small.png'); // Placeholder
+            // Load interact button image
+            this.load.image('interact_button', 'img/icons/target.png'); // Using target.png for interact
         }
 
         create() {
@@ -169,7 +190,62 @@
 
             // --- Controls ---
             this.cursors = this.input.keyboard.createCursorKeys();
-            this.interactKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E); // Added interact key listener
+            this.interactKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E);
+
+            // --- Touch Controls Setup ---
+            this.isTouchDevice = this.sys.game.device.input.touch;
+
+            if (this.isTouchDevice) {
+                const controlSize = 64;
+                const controlPadding = 10;
+                const interactButtonSize = 72;
+                const screenWidth = this.cameras.main.width;
+                const screenHeight = this.cameras.main.height;
+
+                // D-Pad (bottom-left)
+                // Left
+                this.dpad.left = this.add.rectangle(controlPadding + controlSize / 2, screenHeight - controlPadding - controlSize * 1.5, controlSize, controlSize, 0x888888, 0.5).setInteractive();
+                this.dpad.left.on('pointerdown', () => { this.touchFlags.left = true; });
+                this.dpad.left.on('pointerup', () => { this.touchFlags.left = false; });
+                this.dpad.left.on('pointerout', () => { this.touchFlags.left = false; }); // Stop if pointer leaves button while pressed
+
+                // Right
+                this.dpad.right = this.add.rectangle(controlPadding + controlSize * 2.5, screenHeight - controlPadding - controlSize * 1.5, controlSize, controlSize, 0x888888, 0.5).setInteractive();
+                this.dpad.right.on('pointerdown', () => { this.touchFlags.right = true; });
+                this.dpad.right.on('pointerup', () => { this.touchFlags.right = false; });
+                this.dpad.right.on('pointerout', () => { this.touchFlags.right = false; });
+
+                // Up
+                this.dpad.up = this.add.rectangle(controlPadding + controlSize * 1.5, screenHeight - controlPadding - controlSize * 2.5, controlSize, controlSize, 0x888888, 0.5).setInteractive();
+                this.dpad.up.on('pointerdown', () => { this.touchFlags.up = true; });
+                this.dpad.up.on('pointerup', () => { this.touchFlags.up = false; });
+                this.dpad.up.on('pointerout', () => { this.touchFlags.up = false; });
+
+                // Down
+                this.dpad.down = this.add.rectangle(controlPadding + controlSize * 1.5, screenHeight - controlPadding - controlSize / 2, controlSize, controlSize, 0x888888, 0.5).setInteractive();
+                this.dpad.down.on('pointerdown', () => { this.touchFlags.down = true; });
+                this.dpad.down.on('pointerup', () => { this.touchFlags.down = false; });
+                this.dpad.down.on('pointerout', () => { this.touchFlags.down = false; });
+
+                // Interact Button (bottom-right)
+                this.dpad.interact = this.add.sprite(screenWidth - controlPadding - interactButtonSize / 2, screenHeight - controlPadding - interactButtonSize / 2, 'interact_button').setInteractive();
+                this.dpad.interact.setDisplaySize(interactButtonSize, interactButtonSize);
+                this.dpad.interact.setAlpha(0.7);
+                this.dpad.interact.on('pointerdown', () => {
+                    this.touchFlags.interactPressed = true;
+                    // Optional: visual feedback
+                    this.dpad.interact.setAlpha(1);
+                    this.time.delayedCall(100, () => {
+                         if(this.dpad.interact) this.dpad.interact.setAlpha(0.7);
+                    });
+                });
+                // No pointerup needed for interactPressed as it's a single-frame flag, reset in update
+
+                // Make controls fixed to camera
+                [this.dpad.left, this.dpad.right, this.dpad.up, this.dpad.down, this.dpad.interact].forEach(control => {
+                    if (control) control.setScrollFactor(0);
+                });
+            }
 
             // --- Interaction Prompt Text ---
             this.interactionPromptText = this.add.text(this.player.x, this.player.y - 30, 'Press E', {
@@ -234,10 +310,11 @@
                 this.interactionPromptText.setVisible(false);
             }
 
-            // Handle 'E' Key Press
+            // Handle 'E' Key Press or Touch Interact
             const justPressedE = Phaser.Input.Keyboard.JustDown(this.interactKey);
+            const justTouchedInteract = this.touchFlags.interactPressed;
 
-            if (justPressedE) {
+            if (justPressedE || justTouchedInteract) {
                 if (this.showingQuizPromptUI && this.currentNpcInteraction) {
                     // Attempt to start the quiz
                     this.startQuiz(this.currentNpcInteraction.dataId);
@@ -273,21 +350,26 @@
             this.player.setVelocity(0);
 
             // Player Movement (4-Directional Top-Down)
-            if (this.cursors.left.isDown) {
+            if (this.cursors.left.isDown || this.touchFlags.left) {
                 this.player.setVelocityX(-speed);
-            } else if (this.cursors.right.isDown) {
+            } else if (this.cursors.right.isDown || this.touchFlags.right) {
                 this.player.setVelocityX(speed);
             }
 
-            if (this.cursors.up.isDown) {
+            if (this.cursors.up.isDown || this.touchFlags.up) {
                 this.player.setVelocityY(-speed);
-            } else if (this.cursors.down.isDown) {
+            } else if (this.cursors.down.isDown || this.touchFlags.down) {
                 this.player.setVelocityY(speed);
             }
 
             // Normalize and scale the velocity if moving
             if (this.player.body.velocity.x !== 0 || this.player.body.velocity.y !== 0) {
                  this.player.body.velocity.normalize().scale(speed);
+            }
+
+            // Reset single-frame touch flags
+            if (this.touchFlags.interactPressed) {
+                this.touchFlags.interactPressed = false;
             }
         }
 
