@@ -19,7 +19,22 @@ Ready to test your Bitcoin knowledge? Play the latest version here:
 *   **Interactive Quizzes:** Test your understanding with timed, multiple-choice quizzes where you move your player to the correct answer zone.
 *   **Retro Pixel Art Style:** Enjoy a visually appealing game reminiscent of 16-bit classics.
 *   **Cross-Platform Potential:** Built with Cordova for web deployment and future mobile possibilities.
+*   **Basic Multiplayer:** See other players move in real-time using Socket.IO.
 *   **Educational Focus:** Designed to make learning complex Bitcoin topics fun and accessible for everyone.
+
+## Multiplayer with Socket.IO
+
+Bitcoin Quest now features basic real-time multiplayer functionality, allowing players to see each other move within the game world. This is achieved using Socket.IO.
+
+*   **Backend:** An Express server (`api/index.js`) handles Socket.IO connections, manages player states (positions), and broadcasts updates.
+*   **Frontend:** The Phaser client (`www/js/index.js`) connects to the Socket.IO server, sends local player movement, and receives updates about other players to render them on screen.
+*   **Synchronization:** Player positions are synchronized across all connected clients. When a player moves, their new coordinates are sent to the server, which then broadcasts this information to all other clients.
+*   **Event Handling:** Key Socket.IO events handled include:
+    *   `connect`: A new user connects.
+    *   `currentPlayers`: Server sends the list of already connected players to the new user.
+    *   `newPlayer`: Server informs existing clients about a new player joining.
+    *   `playerMoved`: Server broadcasts a player's updated position.
+    *   `playerDisconnected`: Server informs clients when a player leaves.
 
 ## Gameplay Deep Dive
 
@@ -96,13 +111,23 @@ For a comprehensive understanding of the AI collaboration strategy, please refer
     git clone https://github.com/hermitonl/mmo.git
     cd mmo
     ```
-2.  **Install Project Dependencies (Phaser):**
-    Phaser is installed within the `www` directory as it's part of the static assets served by Cordova.
+2.  **Install Project Dependencies:**
+    *   **Backend & Core Dependencies (Express, Socket.IO, etc.):**
+        Run this in the project root directory:
+        ```bash
+        npm install
+        ```
+    *   **Frontend (Phaser - if managing separately, though often included via CDN or as part of the main `npm install` if `package.json` in `www/` is not used):**
+        The current project includes Phaser via a CDN in `www/index.html`, so a separate `npm install phaser` in the `www` directory might not be strictly necessary if you are not bundling it. If you were to bundle Phaser, you would typically install it as a project dependency in the root `package.json`.
+
+    **Troubleshooting `npm install` Permissions (EACCES Error):**
+    If you encounter an `EACCES: permission denied` error during `npm install`, it's likely due to incorrect ownership of the `node_modules` directory. To fix this:
     ```bash
-    cd www
-    npm install phaser
-    cd ..
+    sudo rm -rf node_modules
+    npm install
     ```
+    The first command removes the problematic `node_modules` directory (you'll be prompted for your password). The second command reinstalls dependencies with correct user permissions.
+
 3.  **Add Cordova Platform(s):**
     For browser testing:
     ```bash
@@ -118,59 +143,58 @@ For a comprehensive understanding of the AI collaboration strategy, please refer
     cordova plugin add cordova-plugin-browsersync
     ```
 
-## Running the Game
+## Running the Game Locally (Desktop & Mobile)
 
-**1. Directly Opening `www/index.html` (Quick Web Preview):**
+This setup allows you to run the game with multiplayer functionality on your local machine and access it from desktop or mobile browsers on the same network.
 
-For a very quick preview of the Phaser game logic without Cordova wrappers, you can often open the `www/index.html` file directly in a modern web browser. However, some browser security features (like CORS for local file access) might affect asset loading. Running through a local server (even a simple one like `python -m http.server` from the `www` directory) or using Cordova's serve/run commands is generally more reliable.
-
-**2. Accessing from Mobile on Local Network (macOS Example):**
-
-To play the game on your smartphone or another device on the same Wi-Fi network, you'll need your Mac's local IP address.
-
-*   **Find Your Mac's IP Address:**
-    Open Terminal on your Mac and run:
+1.  **Start the Backend Socket.IO Server:**
+    Open a terminal in the project root directory and run:
     ```bash
-    ipconfig getifaddr en0
+    node api/index.js
     ```
-    This command usually shows the IP address for your Wi-Fi connection (e.g., `192.168.0.192`). If `en0` doesn't work, you might be on a different interface (e.g., `en1` for Wi-Fi if `en0` is Ethernet).
+    This will start the backend server, typically on port 3001. You should see a message like `Server listening on port 3001`.
 
-*   **Start the Game with Cordova Live Reload:**
-    In your project directory, run:
+2.  **Start the Frontend Development Server (with Proxy):**
+    Open another terminal in the project root directory and run:
     ```bash
-    cordova run browser --live-reload
+    npx http-server www -p 8080 -c-1 --cors --proxy http://localhost:3001
     ```
-    Note the port number Cordova uses (often 3000 or 8000, check the terminal output).
+    *   This serves the `www` directory (your Phaser game) on port `8080`.
+    *   `--cors` enables Cross-Origin Resource Sharing.
+    *   `-c-1` disables caching, which is useful for development.
+    *   `--proxy http://localhost:3001` is crucial. It tells `http-server` that any requests it can't find locally (like `/socket.io/...`) should be forwarded to your backend server running on port 3001. This makes the client-side code (which requests `/socket.io/socket.io.js` and connects to `io()`) work seamlessly.
 
-*   **Connect from Your Smartphone:**
-    Open a web browser on your smartphone and go to:
-    ```
-    http://YOUR_MAC_IP_ADDRESS:PORT_NUMBER
-    ```
-    For example, if your Mac's IP is `192.168.0.192` and Cordova is using port `8000`, you would enter:
-    ```
-    http://192.168.0.192:8000
-    ```
-    Ensure your smartphone and Mac are connected to the same Wi-Fi network.
+3.  **Accessing the Game:**
+    *   **On your Desktop:** Open a web browser and go to `http://localhost:8080`.
+    *   **On your Mobile Device (or other devices on the same network):**
+        1.  Find your computer's local IP address.
+            *   **macOS:** Open Terminal and run `ipconfig getifaddr en0` (or `en1` if `en0` is not your Wi-Fi).
+            *   **Windows:** Open Command Prompt and run `ipconfig`, then look for the "IPv4 Address" under your active network adapter.
+            *   **Linux:** Open a terminal and run `hostname -I` or `ip addr show`.
+        2.  Ensure your mobile device is connected to the same Wi-Fi network as your computer.
+        3.  Open a web browser on your mobile device and navigate to `http://YOUR_COMPUTER_IP_ADDRESS:8080` (e.g., `http://192.168.0.192:8080`).
 
-**3. Locally with Cordova (for browser or device testing):**
+    You should see the game load, and players connecting from different browsers/devices should appear and move in real-time. Check the terminal running `node api/index.js` for connection logs.
 
-This method allows you to test Cordova features and prepare for native builds.
-
-*   **With Live Reload (Recommended for Web/Browser Development):**
-    ```bash
-    cordova run browser --live-reload
-    ```
-    This starts a local server. Check your terminal for the URL (often `http://localhost:3000` or similar).
-
-*   **Run on a Connected Device or Emulator (e.g., Android):**
-    ```bash
-    cordova run android
-    ```
+**Note on Cordova:** The instructions above are for web-based local development. If you are using Cordova to build and run on specific platforms (like Android or iOS emulators/devices), the Cordova build process and webviews might handle local connections differently. The `cordova run browser --live-reload` command, for instance, sets up its own server and might not require the `http-server` proxy setup if the backend is accessible. However, for pure web testing with `http-server` and mobile browser access, the proxy method is effective.
 
 ## Vercel Deployment
 
-This project is pre-configured for easy deployment to Vercel via the `vercel.json` file. It serves the `www/` directory as static content.
+This project is configured for deployment to Vercel. The `vercel.json` file handles the necessary build steps and routing:
+
+*   **Static Frontend:** Files in the `www/` directory are served as static assets.
+*   **Node.js Backend:** The `api/index.js` file is deployed as a Vercel serverless function.
+*   **Socket.IO Routing:** The crucial route `{ "src": "/socket.io/(.*)", "dest": "/api/index.js" }` in `vercel.json` ensures that Socket.IO requests from the client are correctly routed to the backend serverless function, enabling real-time communication.
+
+**Client-Side Configuration for Vercel:**
+The client-side code in `www/index.html` and `www/js/index.js` is set up to work with Vercel's environment:
+*   `www/index.html` loads the Socket.IO client library via `<script src="/socket.io/socket.io.js"></script>`.
+*   `www/js/index.js` initializes the connection via `this.socket = io();` (no explicit URL).
+
+Vercel's environment and routing handle the rest, so no IP addresses or specific ports need to be hardcoded in the client for deployment.
+
+**Backend Configuration for Vercel:**
+The `api/index.js` file exports the Express app (`module.exports = app;`). Vercel uses this to run the serverless function. The `server.listen(...)` call in `api/index.js` is primarily for local development; Vercel manages the listening process in its environment.
 
 ## Future Enhancements
 
