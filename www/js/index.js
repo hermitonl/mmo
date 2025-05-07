@@ -38,8 +38,8 @@
 
             // --- NPC Data ---
              this.npcs = [
-                { id: 'npc1', type: 'knowledge', dataId: 'lesson0', x: 200, y: 200, spriteKey: 'npc_knowledge', sprite: null }, // Added sprite property
-                { id: 'npc2', type: 'quiz', dataId: 'quiz4', x: 600, y: 200, spriteKey: 'npc_quiz', sprite: null } // Added sprite property
+                { id: 'npc1', type: 'knowledge', dataId: 'lesson0', x: 150, y: 150, spriteKey: 'npc_knowledge', sprite: null }, // Adjusted for 800x600 background
+                { id: 'npc2', type: 'quiz', dataId: 'quiz4', x: 650, y: 150, spriteKey: 'npc_quiz', sprite: null } // Adjusted for 800x600 background
             ];
 
 
@@ -113,13 +113,31 @@
             // Load NPC placeholder images
             this.load.image('npc_knowledge', 'img/cordova-small.png'); // Placeholder
             this.load.image('npc_quiz', 'img/cordova-small.png'); // Placeholder
+            // Load new background image
+            this.load.image('newBackground', 'img/mainroom_bg.png');
             // Load interact button image
             this.load.image('interact_button', 'img/icons/target.png'); // Using target.png for interact
         }
 
         create() {
+            // --- Assumed dimensions for the new background ---
+            // Dimensions of the background image, confirmed by user.
+            const imageWidth = 800;
+            const imageHeight = 600;
+
+            // --- Add Static Background Image ---
+            this.add.image(0, 0, 'newBackground').setOrigin(0, 0);
+
+            // --- Adjust World and Camera Bounds ---
+            this.physics.world.setBounds(0, 0, imageWidth, imageHeight);
+            this.cameras.main.setBounds(0, 0, imageWidth, imageHeight);
+            // Optional: Make camera follow player if map is larger than screen
+            // this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
+
+
             // --- Player (Top-down view) ---
-            this.player = this.physics.add.sprite(400, 300, 'player');
+            // Position player within the new background
+            this.player = this.physics.add.sprite(400, 450, 'player'); // Adjusted for visibility on 800x600
             this.player.setCollideWorldBounds(true);
             this.player.body.setSize(28, 32); // Adjust as needed
 
