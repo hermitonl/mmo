@@ -110,12 +110,17 @@
 
         preload() {
             // Load player image (using player-small.png as placeholder)
-            this.load.image('player', 'img/player-small.png');
+            // this.load.image('player', 'img/player-small.png');
             // Load NPC placeholder images
-            this.load.image('npc_knowledge', 'img/cordova-small.png'); // Placeholder
-            this.load.image('npc_quiz', 'img/cordova-small.png'); // Placeholder
-            // Load new background image
+            // this.load.image('npc_knowledge', 'img/cordova-small.png'); // Placeholder
+            // this.load.image('npc_quiz', 'img/cordova-small.png'); // Placeholder
+            this.load.spritesheet('player_spritesheet', 'img/characters/RPG_assets.png', { frameWidth: 15, frameHeight: 15 });
+            this.load.image('npc_sprite', 'img/characters/dark-ent.png');
+            // Comment out old background image
             this.load.image('newBackground', 'img/mainroom_bg.png');
+            // Load new tilemap assets
+            // this.load.image('tiles', 'assets/map/spritesheet-extruded.png');
+            // this.load.tilemapTiledJSON('map', 'assets/map/map.json');
             // Load interact button image
             this.load.image('interact_button', 'img/icons/target.png'); // Using target.png for interact
         }
@@ -126,29 +131,61 @@
             const imageWidth = 800;
             const imageHeight = 600;
 
-            // --- Add Static Background Image ---
+            // --- Comment out Static Background Image ---
             this.add.image(0, 0, 'newBackground').setOrigin(0, 0);
 
-            // --- Adjust World and Camera Bounds ---
-            this.physics.world.setBounds(0, 0, imageWidth, imageHeight);
-            this.cameras.main.setBounds(0, 0, imageWidth, imageHeight);
+            // --- Tilemap Setup ---
+            // const map = this.make.tilemap({ key: 'map' });
+            // // Args: Tiled tileset name, Phaser key for tileset image, tileW, tileH, margin, spacing
+            // const tileset = map.addTilesetImage('spritesheet', 'tiles', 16, 16, 0, 0);
+
+            // // --- Create Layers ---
+            // // Ensure layer names match those in your Tiled JSON file
+            // const groundLayer = map.createLayer('Grass', tileset, 0, 0);
+            // const collisionLayer = map.createLayer('Obstacles', tileset, 0, 0);
+
+            // // --- Collision Setup ---
+            // // Assumes 'Obstacles' layer has a custom property 'collides: true' in Tiled
+            // if (collisionLayer) { // Check if layer exists
+            //     collisionLayer.setCollisionByProperty({ collides: true });
+            // }
+
+
+            // --- Adjust World and Camera Bounds to Static Background ---
+            this.physics.world.setBounds(0, 0, 800, 600);
+            this.cameras.main.setBounds(0, 0, 800, 600);
+            this.cameras.main.roundPixels = true; // Helps prevent tile bleeding
+            // this.cameras.main.setZoom(1.25); // Ensure zoom is off for static background
+
             // Optional: Make camera follow player if map is larger than screen
             // this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
 
 
             // --- Player (Top-down view) ---
             // Position player within the new background
-            this.player = this.physics.add.sprite(400, 450, 'player'); // Adjusted for visibility on 800x600
-            this.player.setCollideWorldBounds(true);
-            this.player.body.setSize(28, 32); // Adjust as needed
+            this.player = this.physics.add.sprite(400, 450, 'player_spritesheet', 0); // Adjusted for visibility on 800x600, using new spritesheet
+            this.player.setScale(2); // Scale up new player sprite
+            this.player.setCollideWorldBounds(true); // Player collides with world bounds (now 800x600)
+            this.player.body.setSize(20, 20); // Adjust as needed, new sprite is 20x20
+
+            // --- Add Collider with Tilemap Collision Layer ---
+            // if (collisionLayer) { // Check if layer exists
+            //     this.physics.add.collider(this.player, collisionLayer); // This would cause an error as collisionLayer is not defined
+            // }
+
+            // --- Camera Follow Player ---
+            this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
+
 
             // --- Spawn NPCs ---
             this.npcs.forEach(npc => {
-                const npcSprite = this.physics.add.staticSprite(npc.x, npc.y, npc.spriteKey);
+                const npcSprite = this.physics.add.staticSprite(npc.x, npc.y, 'npc_sprite'); // Use new NPC sprite
                 npc.sprite = npcSprite; // Store sprite reference
-                npcSprite.body.setSize(28, 32); // Set explicit physics size, matching player for consistency
+                npcSprite.setScale(2); // Scale up new NPC sprite
+                npcSprite.body.setSize(20, 20); // Set explicit physics size, new sprite is 20x20
                 npcSprite.body.immovable = true; // Make NPC immovable
-                this.physics.add.collider(this.player, npcSprite); // Add collision
+                // Original NPC collision with player (still needed if NPCs are obstacles)
+                this.physics.add.collider(this.player, npcSprite);
             });
 
             // --- UI Text Elements ---
@@ -676,6 +713,9 @@
         width: 800,
         height: 600,
         parent: 'game',
+        render: {
+            pixelArt: true
+        },
         physics: {
             default: 'arcade',
             arcade: {
