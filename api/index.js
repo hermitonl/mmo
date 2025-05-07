@@ -57,6 +57,6 @@ app.get('/api', (req, res) => {
 // Vercel will typically handle starting the server.
 // For local development, you might add:
 const PORT = process.env.PORT || 3001;
-server.listen(PORT, () => console.log(`Server listening on port ${PORT}`));
+// server.listen(PORT, () => console.log(`Server listening on port ${PORT}`)); // Vercel handles listening
 
 module.exports = server; // Export the HTTP server instance for Vercel
