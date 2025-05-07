@@ -95,6 +95,7 @@
             this.playerScore = 0; // To track player's score
             this.scoreText = null; // To hold score text object
             this.completedLessons = new Set(); // Track completed lessons
+            this.feedbackText = null; // For displaying "Correct!" or "Wrong!"
 
             // --- NPC Interaction State ---
             // this.interactKey is already defined above
@@ -290,6 +291,15 @@
             const quizPromptClose = this.add.text(400, 360, '[Move Away to Cancel]', { fontSize: '12px', fill: '#aaa' }).setOrigin(0.5); // Added cancel instruction
             this.quizPromptContainer = this.add.container(0, 0, [quizPromptBg, quizPromptTitle, quizPromptTopic, quizPromptCost, quizPromptStart, quizPromptClose]);
             this.quizPromptContainer.setVisible(false);
+
+            // --- Feedback Text ---
+            this.feedbackText = this.add.text(this.cameras.main.width / 2, this.cameras.main.height / 2, '', {
+                fontSize: '48px',
+                fill: '#fff',
+                align: 'center',
+                stroke: '#000',
+                strokeThickness: 6
+            }).setOrigin(0.5).setVisible(false).setDepth(10); // High depth to appear on top
 
 
             // --- Load Initial Question ---
@@ -519,6 +529,9 @@
                 this.playerScore += reward;
                 console.log('Correct! Score:', this.playerScore);
                 this.scoreText.setText('Sats: ' + this.playerScore); // Update score display
+                this.feedbackText.setText('Correct!').setColor('#00ff00').setVisible(true);
+            } else {
+                this.feedbackText.setText('Wrong!').setColor('#ff0000').setVisible(true);
             }
 
             console.log('Player was in zone:', playerZoneIndex, 'Correct zone:', this.currentCorrectAnswerIndex, 'Result:', isCorrect ? 'CORRECT' : 'INCORRECT');
@@ -529,6 +542,7 @@
              // After a delay, load the next question or end the quiz
              this.time.delayedCall(2000, () => {
                  this.cameras.main.setBackgroundColor('#000000'); // Reset background
+                 this.feedbackText.setVisible(false); // Hide feedback text
 
                  this.currentQuizQuestionIndex++; // Move to the next question index
 
