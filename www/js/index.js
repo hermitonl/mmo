@@ -5,6 +5,25 @@
             super({ key: 'GameScene' });
             this.player = null;
             this.cursors = null;
+            this.interactKey = null; // Will be defined in create
+
+            // --- Touch Control Flags/Refs ---
+            this.isTouchDevice = false;
+            this.dpad = {
+                up: null,
+                down: null,
+                left: null,
+                right: null,
+                interact: null
+            };
+            this.touchFlags = {
+                up: false,
+                down: false,
+                left: false,
+                right: false,
+                interactPressed: false // For single press detection
+            };
+
 
             // --- Lesson Data ---
             this.lessons = [
@@ -19,8 +38,8 @@
 
             // --- NPC Data ---
              this.npcs = [
-                { id: 'npc1', type: 'knowledge', dataId: 'lesson0', x: 200, y: 200, spriteKey: 'npc_knowledge', sprite: null }, // Added sprite property
-                { id: 'npc2', type: 'quiz', dataId: 'quiz4', x: 600, y: 200, spriteKey: 'npc_quiz', sprite: null } // Added sprite property
+                { id: 'npc1', type: 'knowledge', dataId: 'lesson0', x: 150, y: 150, spriteKey: 'npc_knowledge', sprite: null }, // Adjusted for 800x600 background
+                { id: 'npc2', type: 'quiz', dataId: 'quiz4', x: 650, y: 150, spriteKey: 'npc_quiz', sprite: null } // Adjusted for 800x600 background
             ];
 
 
@@ -76,9 +95,10 @@
             this.playerScore = 0; // To track player's score
             this.scoreText = null; // To hold score text object
             this.completedLessons = new Set(); // Track completed lessons
+            this.feedbackText = null; // For displaying "Correct!" or "Wrong!"
 
             // --- NPC Interaction State ---
-            this.interactKey = null;
+            // this.interactKey is already defined above
             this.closestNpc = null;
             this.interactionPromptText = null;
             this.showingKnowledgeUI = false;
@@ -90,25 +110,87 @@
 
         preload() {
             // Load player image (using player-small.png as placeholder)
-            this.load.image('player', 'img/player-small.png');
+            // this.load.image('player', 'img/player-small.png');
             // Load NPC placeholder images
-            this.load.image('npc_knowledge', 'img/cordova-small.png'); // Placeholder
-            this.load.image('npc_quiz', 'img/cordova-small.png'); // Placeholder
+            // this.load.image('npc_knowledge', 'img/cordova-small.png'); // Placeholder
+            // this.load.image('npc_quiz', 'img/cordova-small.png'); // Placeholder
+            this.load.spritesheet('player_spritesheet', 'img/characters/RPG_assets.png', { frameWidth: 15, frameHeight: 15 });
+            this.load.image('npc_sprite', 'img/characters/dark-ent.png');
+            // Comment out old background image
+            this.load.image('newBackground', 'img/mainroom_bg.png');
+            // Load new tilemap assets
+            // this.load.image('tiles', 'assets/map/spritesheet-extruded.png');
+            // this.load.tilemapTiledJSON('map', 'assets/map/map.json');
+            // Load interact button image
+            this.load.image('interact_button', 'img/icons/target.png'); // Using target.png for interact
         }
 
         create() {
+            // --- Socket.IO Initialization ---
+            this.socket = io();
+            this.otherPlayers = this.physics.add.group();
+
+            // --- Assumed dimensions for the new background ---
+            // Dimensions of the background image, confirmed by user.
+            const imageWidth = 800;
+            const imageHeight = 600;
+
+            // --- Comment out Static Background Image ---
+            this.add.image(0, 0, 'newBackground').setOrigin(0, 0);
+
+            // --- Tilemap Setup ---
+            // const map = this.make.tilemap({ key: 'map' });
+            // // Args: Tiled tileset name, Phaser key for tileset image, tileW, tileH, margin, spacing
+            // const tileset = map.addTilesetImage('spritesheet', 'tiles', 16, 16, 0, 0);
+
+            // // --- Create Layers ---
+            // // Ensure layer names match those in your Tiled JSON file
+            // const groundLayer = map.createLayer('Grass', tileset, 0, 0);
+            // const collisionLayer = map.createLayer('Obstacles', tileset, 0, 0);
+
+            // // --- Collision Setup ---
+            // // Assumes 'Obstacles' layer has a custom property 'collides: true' in Tiled
+            // if (collisionLayer) { // Check if layer exists
+            //     collisionLayer.setCollisionByProperty({ collides: true });
+            // }
+
+
+            // --- Adjust World and Camera Bounds to Static Background ---
+            this.physics.world.setBounds(0, 0, 800, 600);
+            this.cameras.main.setBounds(0, 0, 800, 600);
+            this.cameras.main.roundPixels = true; // Helps prevent tile bleeding
+            // this.cameras.main.setZoom(1.25); // Ensure zoom is off for static background
+
+            // Optional: Make camera follow player if map is larger than screen
+            // this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
+
+
             // --- Player (Top-down view) ---
-            this.player = this.physics.add.sprite(400, 300, 'player');
-            this.player.setCollideWorldBounds(true);
-            this.player.body.setSize(28, 32); // Adjust as needed
+            // Position player within the new background
+            this.player = this.physics.add.sprite(400, 450, 'player_spritesheet', 0); // Adjusted for visibility on 800x600, using new spritesheet
+            this.player.setScale(2); // Scale up new player sprite
+            this.player.setCollideWorldBounds(true); // Player collides with world bounds (now 800x600)
+            this.player.body.setSize(20, 20); // Adjust as needed, new sprite is 20x20
+            this.player.oldPosition = { x: this.player.x, y: this.player.y }; // Initialize oldPosition
+
+            // --- Add Collider with Tilemap Collision Layer ---
+            // if (collisionLayer) { // Check if layer exists
+            //     this.physics.add.collider(this.player, collisionLayer); // This would cause an error as collisionLayer is not defined
+            // }
+
+            // --- Camera Follow Player ---
+            this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
+
 
             // --- Spawn NPCs ---
             this.npcs.forEach(npc => {
-                const npcSprite = this.physics.add.staticSprite(npc.x, npc.y, npc.spriteKey);
+                const npcSprite = this.physics.add.staticSprite(npc.x, npc.y, 'npc_sprite'); // Use new NPC sprite
                 npc.sprite = npcSprite; // Store sprite reference
-                npcSprite.body.setSize(28, 32); // Set explicit physics size, matching player for consistency
+                npcSprite.setScale(2); // Scale up new NPC sprite
+                npcSprite.body.setSize(20, 20); // Set explicit physics size, new sprite is 20x20
                 npcSprite.body.immovable = true; // Make NPC immovable
-                this.physics.add.collider(this.player, npcSprite); // Add collision
+                // Original NPC collision with player (still needed if NPCs are obstacles)
+                this.physics.add.collider(this.player, npcSprite);
             });
 
             // --- UI Text Elements ---
@@ -169,7 +251,62 @@
 
             // --- Controls ---
             this.cursors = this.input.keyboard.createCursorKeys();
-            this.interactKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E); // Added interact key listener
+            this.interactKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E);
+
+            // --- Touch Controls Setup ---
+            this.isTouchDevice = this.sys.game.device.input.touch;
+
+            if (this.isTouchDevice) {
+                const controlSize = 64;
+                const controlPadding = 10;
+                const interactButtonSize = 72;
+                const screenWidth = this.cameras.main.width;
+                const screenHeight = this.cameras.main.height;
+
+                // D-Pad (bottom-left)
+                // Left
+                this.dpad.left = this.add.rectangle(controlPadding + controlSize / 2, screenHeight - controlPadding - controlSize * 1.5, controlSize, controlSize, 0x888888, 0.5).setInteractive();
+                this.dpad.left.on('pointerdown', () => { this.touchFlags.left = true; });
+                this.dpad.left.on('pointerup', () => { this.touchFlags.left = false; });
+                this.dpad.left.on('pointerout', () => { this.touchFlags.left = false; }); // Stop if pointer leaves button while pressed
+
+                // Right
+                this.dpad.right = this.add.rectangle(controlPadding + controlSize * 2.5, screenHeight - controlPadding - controlSize * 1.5, controlSize, controlSize, 0x888888, 0.5).setInteractive();
+                this.dpad.right.on('pointerdown', () => { this.touchFlags.right = true; });
+                this.dpad.right.on('pointerup', () => { this.touchFlags.right = false; });
+                this.dpad.right.on('pointerout', () => { this.touchFlags.right = false; });
+
+                // Up
+                this.dpad.up = this.add.rectangle(controlPadding + controlSize * 1.5, screenHeight - controlPadding - controlSize * 2.5, controlSize, controlSize, 0x888888, 0.5).setInteractive();
+                this.dpad.up.on('pointerdown', () => { this.touchFlags.up = true; });
+                this.dpad.up.on('pointerup', () => { this.touchFlags.up = false; });
+                this.dpad.up.on('pointerout', () => { this.touchFlags.up = false; });
+
+                // Down
+                this.dpad.down = this.add.rectangle(controlPadding + controlSize * 1.5, screenHeight - controlPadding - controlSize / 2, controlSize, controlSize, 0x888888, 0.5).setInteractive();
+                this.dpad.down.on('pointerdown', () => { this.touchFlags.down = true; });
+                this.dpad.down.on('pointerup', () => { this.touchFlags.down = false; });
+                this.dpad.down.on('pointerout', () => { this.touchFlags.down = false; });
+
+                // Interact Button (bottom-right)
+                this.dpad.interact = this.add.sprite(screenWidth - controlPadding - interactButtonSize / 2, screenHeight - controlPadding - interactButtonSize / 2, 'interact_button').setInteractive();
+                this.dpad.interact.setDisplaySize(interactButtonSize, interactButtonSize);
+                this.dpad.interact.setAlpha(0.7);
+                this.dpad.interact.on('pointerdown', () => {
+                    this.touchFlags.interactPressed = true;
+                    // Optional: visual feedback
+                    this.dpad.interact.setAlpha(1);
+                    this.time.delayedCall(100, () => {
+                         if(this.dpad.interact) this.dpad.interact.setAlpha(0.7);
+                    });
+                });
+                // No pointerup needed for interactPressed as it's a single-frame flag, reset in update
+
+                // Make controls fixed to camera
+                [this.dpad.left, this.dpad.right, this.dpad.up, this.dpad.down, this.dpad.interact].forEach(control => {
+                    if (control) control.setScrollFactor(0);
+                });
+            }
 
             // --- Interaction Prompt Text ---
             this.interactionPromptText = this.add.text(this.player.x, this.player.y - 30, 'Press E', {
@@ -197,9 +334,60 @@
             this.quizPromptContainer = this.add.container(0, 0, [quizPromptBg, quizPromptTitle, quizPromptTopic, quizPromptCost, quizPromptStart, quizPromptClose]);
             this.quizPromptContainer.setVisible(false);
 
+            // --- Feedback Text ---
+            this.feedbackText = this.add.text(this.cameras.main.width / 2, this.cameras.main.height / 2, '', {
+                fontSize: '48px',
+                fill: '#fff',
+                align: 'center',
+                stroke: '#000',
+                strokeThickness: 6
+            }).setOrigin(0.5).setVisible(false).setDepth(10); // High depth to appear on top
+
 
             // --- Load Initial Question ---
             // this.loadQuestion(0, 0); // REMOVED - Quiz now starts via NPC interaction
+
+            // --- Socket Event Handlers ---
+            this.socket.on('currentPlayers', (players) => {
+              Object.keys(players).forEach((id) => {
+                if (players[id].id === this.socket.id) {
+                  // Optionally, handle self-data if needed, or add own player to a group
+                } else {
+                  // Add sprite for other players
+                  const otherPlayer = this.physics.add.sprite(players[id].x, players[id].y, 'player_spritesheet', 0); // Use 'player_spritesheet' or a different key if you want different sprites for others
+                  otherPlayer.playerId = players[id].id;
+                  otherPlayer.setScale(2); // Apply scaling if needed, consistent with local player
+                  this.otherPlayers.add(otherPlayer);
+                }
+              });
+            });
+
+            this.socket.on('newPlayer', (playerInfo) => {
+              // Ensure not to add self if server broadcasts own connection as newPlayer
+              if (playerInfo.id !== this.socket.id) {
+                const otherPlayer = this.physics.add.sprite(playerInfo.x, playerInfo.y, 'player_spritesheet', 0);
+                otherPlayer.playerId = playerInfo.id;
+                otherPlayer.setScale(2); // Apply scaling
+                this.otherPlayers.add(otherPlayer);
+              }
+            });
+
+            this.socket.on('playerMoved', (playerInfo) => {
+              this.otherPlayers.getChildren().forEach((otherPlayer) => {
+                if (playerInfo.id === otherPlayer.playerId) {
+                  otherPlayer.setPosition(playerInfo.x, playerInfo.y);
+                  // Potentially update animation/frame based on movement in future
+                }
+              });
+            });
+
+            this.socket.on('playerDisconnected', (playerId) => {
+              this.otherPlayers.getChildren().forEach((otherPlayer) => {
+                if (playerId === otherPlayer.playerId) {
+                  otherPlayer.destroy();
+                }
+              });
+            });
         }
 
         update() {
@@ -234,10 +422,11 @@
                 this.interactionPromptText.setVisible(false);
             }
 
-            // Handle 'E' Key Press
+            // Handle 'E' Key Press or Touch Interact
             const justPressedE = Phaser.Input.Keyboard.JustDown(this.interactKey);
+            const justTouchedInteract = this.touchFlags.interactPressed;
 
-            if (justPressedE) {
+            if (justPressedE || justTouchedInteract) {
                 if (this.showingQuizPromptUI && this.currentNpcInteraction) {
                     // Attempt to start the quiz
                     this.startQuiz(this.currentNpcInteraction.dataId);
@@ -273,21 +462,43 @@
             this.player.setVelocity(0);
 
             // Player Movement (4-Directional Top-Down)
-            if (this.cursors.left.isDown) {
+            if (this.cursors.left.isDown || this.touchFlags.left) {
                 this.player.setVelocityX(-speed);
-            } else if (this.cursors.right.isDown) {
+            } else if (this.cursors.right.isDown || this.touchFlags.right) {
                 this.player.setVelocityX(speed);
             }
 
-            if (this.cursors.up.isDown) {
+            if (this.cursors.up.isDown || this.touchFlags.up) {
                 this.player.setVelocityY(-speed);
-            } else if (this.cursors.down.isDown) {
+            } else if (this.cursors.down.isDown || this.touchFlags.down) {
                 this.player.setVelocityY(speed);
             }
 
             // Normalize and scale the velocity if moving
             if (this.player.body.velocity.x !== 0 || this.player.body.velocity.y !== 0) {
                  this.player.body.velocity.normalize().scale(speed);
+            }
+
+            // Reset single-frame touch flags
+            if (this.touchFlags.interactPressed) {
+                this.touchFlags.interactPressed = false;
+            }
+
+            // --- Emit Player Movement ---
+            if (this.player && this.socket) { // Ensure player and socket exist
+              const x = this.player.x;
+              const y = this.player.y;
+              // const r = this.player.rotation; // If syncing rotation
+
+              if (this.player.oldPosition && (x !== this.player.oldPosition.x || y !== this.player.oldPosition.y /* || r !== this.player.oldPosition.rotation */)) {
+                this.socket.emit('playerMovement', { x: this.player.x, y: this.player.y /*, rotation: this.player.rotation */ });
+              }
+              // Store old position
+              this.player.oldPosition = {
+                x: this.player.x,
+                y: this.player.y,
+                // rotation: this.player.rotation
+              };
             }
         }
 
@@ -419,6 +630,9 @@
                 this.playerScore += reward;
                 console.log('Correct! Score:', this.playerScore);
                 this.scoreText.setText('Sats: ' + this.playerScore); // Update score display
+                this.feedbackText.setText('Correct!').setColor('#00ff00').setVisible(true);
+            } else {
+                this.feedbackText.setText('Wrong!').setColor('#ff0000').setVisible(true);
             }
 
             console.log('Player was in zone:', playerZoneIndex, 'Correct zone:', this.currentCorrectAnswerIndex, 'Result:', isCorrect ? 'CORRECT' : 'INCORRECT');
@@ -429,6 +643,7 @@
              // After a delay, load the next question or end the quiz
              this.time.delayedCall(2000, () => {
                  this.cameras.main.setBackgroundColor('#000000'); // Reset background
+                 this.feedbackText.setVisible(false); // Hide feedback text
 
                  this.currentQuizQuestionIndex++; // Move to the next question index
 
@@ -562,6 +777,9 @@
         width: 800,
         height: 600,
         parent: 'game',
+        render: {
+            pixelArt: true
+        },
         physics: {
             default: 'arcade',
             arcade: {
