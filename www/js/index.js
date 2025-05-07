@@ -353,11 +353,24 @@
                 if (players[id].id === this.socket.id) {
                   // Optionally, handle self-data if needed, or add own player to a group
                 } else {
-                  // Add sprite for other players
-                  const otherPlayer = this.physics.add.sprite(players[id].x, players[id].y, 'player_spritesheet', 0); // Use 'player_spritesheet' or a different key if you want different sprites for others
-                  otherPlayer.playerId = players[id].id;
-                  otherPlayer.setScale(2); // Apply scaling if needed, consistent with local player
-                  this.otherPlayers.add(otherPlayer);
+                  // Check if player already exists
+                  let existingPlayer = null;
+                  this.otherPlayers.getChildren().forEach(op => {
+                    if (op.playerId === players[id].id) {
+                      existingPlayer = op;
+                    }
+                  });
+
+                  if (!existingPlayer) {
+                    // Add sprite for other players
+                    const otherPlayer = this.physics.add.sprite(players[id].x, players[id].y, 'player_spritesheet', 0); // Use 'player_spritesheet' or a different key if you want different sprites for others
+                    otherPlayer.playerId = players[id].id;
+                    otherPlayer.setScale(2); // Apply scaling if needed, consistent with local player
+                    this.otherPlayers.add(otherPlayer);
+                  } else {
+                    // Player already exists, update position
+                    existingPlayer.setPosition(players[id].x, players[id].y);
+                  }
                 }
               });
             });
@@ -365,10 +378,24 @@
             this.socket.on('newPlayer', (playerInfo) => {
               // Ensure not to add self if server broadcasts own connection as newPlayer
               if (playerInfo.id !== this.socket.id) {
-                const otherPlayer = this.physics.add.sprite(playerInfo.x, playerInfo.y, 'player_spritesheet', 0);
-                otherPlayer.playerId = playerInfo.id;
-                otherPlayer.setScale(2); // Apply scaling
-                this.otherPlayers.add(otherPlayer);
+                // Check if player already exists
+                let existingPlayer = null;
+                this.otherPlayers.getChildren().forEach(op => {
+                  if (op.playerId === playerInfo.id) {
+                    existingPlayer = op;
+                  }
+                });
+
+                if (!existingPlayer) {
+                  const otherPlayer = this.physics.add.sprite(playerInfo.x, playerInfo.y, 'player_spritesheet', 0);
+                  otherPlayer.playerId = playerInfo.id;
+                  otherPlayer.setScale(2); // Apply scaling
+                  this.otherPlayers.add(otherPlayer);
+                } else {
+                  // Player already exists, update position (though newPlayer typically means they weren't there)
+                  // This case might be redundant if server logic is perfect, but good for robustness
+                  existingPlayer.setPosition(playerInfo.x, playerInfo.y);
+                }
               }
             });
 
