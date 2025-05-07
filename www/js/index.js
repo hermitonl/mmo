@@ -354,12 +354,7 @@
                   // Optionally, handle self-data if needed, or add own player to a group
                 } else {
                   // Check if player already exists
-                  let existingPlayer = null;
-                  this.otherPlayers.getChildren().forEach(op => {
-                    if (op.playerId === players[id].id) {
-                      existingPlayer = op;
-                    }
-                  });
+                  const existingPlayer = this.otherPlayers.getChildren().find(op => op.playerId === players[id].id);
 
                   if (!existingPlayer) {
                     // Add sprite for other players
@@ -379,12 +374,7 @@
               // Ensure not to add self if server broadcasts own connection as newPlayer
               if (playerInfo.id !== this.socket.id) {
                 // Check if player already exists
-                let existingPlayer = null;
-                this.otherPlayers.getChildren().forEach(op => {
-                  if (op.playerId === playerInfo.id) {
-                    existingPlayer = op;
-                  }
-                });
+                const existingPlayer = this.otherPlayers.getChildren().find(op => op.playerId === playerInfo.id);
 
                 if (!existingPlayer) {
                   const otherPlayer = this.physics.add.sprite(playerInfo.x, playerInfo.y, 'player_spritesheet', 0);
