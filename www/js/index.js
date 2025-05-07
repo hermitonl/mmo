@@ -356,17 +356,20 @@
                   // Add sprite for other players
                   const otherPlayer = this.physics.add.sprite(players[id].x, players[id].y, 'player_spritesheet', 0); // Use 'player_spritesheet' or a different key if you want different sprites for others
                   otherPlayer.playerId = players[id].id;
-                  // otherPlayer.setScale(2); // Apply scaling if needed, consistent with local player
+                  otherPlayer.setScale(2); // Apply scaling if needed, consistent with local player
                   this.otherPlayers.add(otherPlayer);
                 }
               });
             });
 
             this.socket.on('newPlayer', (playerInfo) => {
-              const otherPlayer = this.physics.add.sprite(playerInfo.x, playerInfo.y, 'player_spritesheet', 0);
-              otherPlayer.playerId = playerInfo.id;
-              // otherPlayer.setScale(2); // Apply scaling
-              this.otherPlayers.add(otherPlayer);
+              // Ensure not to add self if server broadcasts own connection as newPlayer
+              if (playerInfo.id !== this.socket.id) {
+                const otherPlayer = this.physics.add.sprite(playerInfo.x, playerInfo.y, 'player_spritesheet', 0);
+                otherPlayer.playerId = playerInfo.id;
+                otherPlayer.setScale(2); // Apply scaling
+                this.otherPlayers.add(otherPlayer);
+              }
             });
 
             this.socket.on('playerMoved', (playerInfo) => {
@@ -482,18 +485,21 @@
             }
 
             // --- Emit Player Movement ---
-            var x = this.player.x;
-            var y = this.player.y;
-            // Add rotation if your player sprite rotates: var r = this.player.rotation;
-            if (this.player.oldPosition && (x !== this.player.oldPosition.x || y !== this.player.oldPosition.y /* || r !== this.player.oldPosition.rotation */)) {
-              this.socket.emit('playerMovement', { x: this.player.x, y: this.player.y /*, rotation: this.player.rotation */ });
+            if (this.player && this.socket) { // Ensure player and socket exist
+              const x = this.player.x;
+              const y = this.player.y;
+              // const r = this.player.rotation; // If syncing rotation
+
+              if (this.player.oldPosition && (x !== this.player.oldPosition.x || y !== this.player.oldPosition.y /* || r !== this.player.oldPosition.rotation */)) {
+                this.socket.emit('playerMovement', { x: this.player.x, y: this.player.y /*, rotation: this.player.rotation */ });
+              }
+              // Store old position
+              this.player.oldPosition = {
+                x: this.player.x,
+                y: this.player.y,
+                // rotation: this.player.rotation
+              };
             }
-            // Store old position
-            this.player.oldPosition = {
-              x: this.player.x,
-              y: this.player.y,
-              // rotation: this.player.rotation
-            };
         }
 
 
