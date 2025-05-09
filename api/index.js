@@ -1,3 +1,4 @@
+console.log('[API Server Module] TOP OF FILE api/index.js loading/re-loading. Timestamp:', new Date().toISOString()); // New log
 require('dotenv').config(); // Load environment variables from .env file
 const express = require('express');
 const http = require('http');
@@ -7,9 +8,20 @@ const { v4: uuidv4 } = require('uuid');
 
 const app = express();
 
-// Middleware to log all requests
+// New VERY EARLY middleware
 app.use((req, res, next) => {
-  console.log(`[API Server] Received request: ${req.method} ${req.originalUrl}`);
+  const timestamp = new Date().toISOString();
+  console.log(`[API Server VERY EARLY MW - ${timestamp}] Path: ${req.path}, OriginalURL: ${req.originalUrl}, Method: ${req.method}`);
+  if (req.path && req.path.startsWith('/api/quiz')) {
+    console.log(`[API Server VERY EARLY MW - ${timestamp}] SAW /api/quiz request`);
+  }
+  next();
+});
+
+// Middleware to log all requests (existing)
+app.use((req, res, next) => {
+  const timestamp = new Date().toISOString();
+  console.log(`[API Server - ${timestamp}] Received request: ${req.method} ${req.originalUrl}`); // Existing log, added timestamp
   next();
 });
 
