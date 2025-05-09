@@ -10,6 +10,7 @@ const { v4: uuidv4 } = require('uuid');
 // Cache for quiz data
 const quizCache = {};
 const CACHE_DURATION_MS = 5 * 60 * 1000; // 5 minutes
+const MAX_QUIZ_VERSIONS_PER_KEY = 10; // Store up to 10 different versions of a quiz for the same topic/count
 
 const DEFAULT_BITCOIN_QUIZ_DATA = {
   id: 'default-bitcoin-quiz-v1',
@@ -296,11 +297,26 @@ Please strictly adhere to this JSON format and ensure the output is only the JSO
       questions: validatedQuestions // Now with shuffled answers
     };
 
-    quizCache[cacheKey] = {
-      data: quizDataFromGemini, // Store the version with shuffled answers
-      expiresAt: Date.now() + CACHE_DURATION_MS
+    // Initialize the array for this cache key if it doesn't exist
+    if (!Array.isArray(quizCache[cacheKey])) {
+      quizCache[cacheKey] = [];
+    }
+
+    const newCacheEntry = {
+      data: quizDataFromGemini, // Already has shuffled answers
+      expiresAt: Date.now() + CACHE_DURATION_MS,
+      fetchedAt: Date.now() // To identify the newest if needed, though unshift handles it
     };
-    console.log(`[API Server /api/quiz BACKGROUND] Cached new data for key: ${cacheKey}, topic: ${originalTopic}, expires at: ${new Date(quizCache[cacheKey].expiresAt).toISOString()}`);
+
+    // Add the new quiz version to the beginning of the array
+    quizCache[cacheKey].unshift(newCacheEntry);
+
+    // Ensure we don't store more than MAX_QUIZ_VERSIONS_PER_KEY
+    if (quizCache[cacheKey].length > MAX_QUIZ_VERSIONS_PER_KEY) {
+      quizCache[cacheKey].pop(); // Remove the oldest version (from the end)
+    }
+
+    console.log(`[API Server /api/quiz BACKGROUND] Cached new data for key: ${cacheKey}, topic: ${originalTopic}. Versions stored: ${quizCache[cacheKey].length}. Expires at: ${new Date(newCacheEntry.expiresAt).toISOString()}`);
 
   } catch (error) {
     console.error(`[API Server /api/quiz BACKGROUND] Error generating quiz for topic "${originalTopic}":`, error);
@@ -325,15 +341,29 @@ app.get('/api/quiz', async (req, res) => {
   const cacheKey = `quiz-${requestedTopic}-${count}`;
 
   // Check cache for the *requested* quiz
-  if (quizCache[cacheKey] && Date.now() < quizCache[cacheKey].expiresAt) {
-    console.log(`[API Server /api/quiz] Cache HIT for key: ${cacheKey} (topic: ${requestedTopic})`);
-    // Data in cache should already have answers shuffled by fetchAndCacheQuiz
-    // Send a deep copy to prevent accidental modification of the cached object
-    const cachedQuizCopy = JSON.parse(JSON.stringify(quizCache[cacheKey].data));
-    return res.json(cachedQuizCopy);
+  let servedFromCache = false;
+  if (Array.isArray(quizCache[cacheKey]) && quizCache[cacheKey].length > 0) {
+    // Filter out expired versions and update the cache for this key
+    const now = Date.now();
+    const validEntries = quizCache[cacheKey].filter(entry => now < entry.expiresAt);
+    quizCache[cacheKey] = validEntries; // Update cache with only valid entries
+
+    if (validEntries.length > 0) {
+      // Serve the most recently fetched valid quiz (it's at the beginning due to unshift)
+      const quizToServe = validEntries[0].data; // This data already has answers shuffled
+      console.log(`[API Server /api/quiz] Cache HIT for key: ${cacheKey} (topic: ${requestedTopic}). Serving version fetched at ${new Date(validEntries[0].fetchedAt).toISOString()}`);
+      // Send a deep copy to prevent accidental modification of the cached object
+      const cachedQuizCopy = JSON.parse(JSON.stringify(quizToServe));
+      res.json(cachedQuizCopy);
+      servedFromCache = true;
+    }
   }
 
-  // Cache MISS for the requested quiz
+  if (servedFromCache) {
+    return; // Response already sent
+  }
+
+  // Cache MISS for the requested quiz (or all versions expired)
   console.log(`[API Server /api/quiz] Cache MISS for key: ${cacheKey} (topic: ${requestedTopic}). Serving default quiz (with shuffled answers) and fetching in background.`);
   
   // Create a deep copy of the default quiz to shuffle its answers without modifying the original
