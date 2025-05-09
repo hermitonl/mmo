@@ -127,8 +127,8 @@
 
         create() {
             // --- Socket.IO Initialization ---
-            // this.socket = io(); // Multiplayer removed
-            // this.otherPlayers = this.physics.add.group(); // Multiplayer removed
+            this.socket = io();
+            this.otherPlayers = this.physics.add.group();
 
             // --- Assumed dimensions for the new background ---
             // Dimensions of the background image, confirmed by user.
@@ -348,63 +348,76 @@
             // this.loadQuestion(0, 0); // REMOVED - Quiz now starts via NPC interaction
 
             // --- Socket Event Handlers ---
-            // this.socket.on('currentPlayers', (players) => { // Multiplayer removed
-            //   Object.keys(players).forEach((id) => {
-            //     if (players[id].id === this.socket.id) {
-            //       // Optionally, handle self-data if needed, or add own player to a group
-            //     } else {
-            //       // Check if player already exists
-            //       const existingPlayer = this.otherPlayers.getChildren().find(op => op.playerId === players[id].id);
-            //
-            //       if (!existingPlayer) {
-            //         // Add sprite for other players
-            //         const otherPlayer = this.physics.add.sprite(players[id].x, players[id].y, 'player_spritesheet', 0); // Use 'player_spritesheet' or a different key if you want different sprites for others
-            //         otherPlayer.playerId = players[id].id;
-            //         otherPlayer.setScale(2); // Apply scaling if needed, consistent with local player
-            //         this.otherPlayers.add(otherPlayer);
-            //       } else {
-            //         // Player already exists, update position
-            //         existingPlayer.setPosition(players[id].x, players[id].y);
-            //       }
-            //     }
-            //   });
-            // });
-            //
-            // this.socket.on('newPlayer', (playerInfo) => { // Multiplayer removed
-            //   // Ensure not to add self if server broadcasts own connection as newPlayer
-            //   if (playerInfo.id !== this.socket.id) {
-            //     // Check if player already exists
-            //     const existingPlayer = this.otherPlayers.getChildren().find(op => op.playerId === playerInfo.id);
-            //
-            //     if (!existingPlayer) {
-            //       const otherPlayer = this.physics.add.sprite(playerInfo.x, playerInfo.y, 'player_spritesheet', 0);
-            //       otherPlayer.playerId = playerInfo.id;
-            //       otherPlayer.setScale(2); // Apply scaling
-            //       this.otherPlayers.add(otherPlayer);
-            //     } else {
-            //       // Player already exists, update position (though newPlayer typically means they weren't there)
-            //       // This case might be redundant if server logic is perfect, but good for robustness
-            //       existingPlayer.setPosition(playerInfo.x, playerInfo.y);
-            //     }
-            //   }
-            // });
-            //
-            // this.socket.on('playerMoved', (playerInfo) => { // Multiplayer removed
-            //   this.otherPlayers.getChildren().forEach((otherPlayer) => {
-            //     if (playerInfo.id === otherPlayer.playerId) {
-            //       otherPlayer.setPosition(playerInfo.x, playerInfo.y);
-            //       // Potentially update animation/frame based on movement in future
-            //     }
-            //   });
-            // });
-            //
-            // this.socket.on('playerDisconnected', (playerId) => { // Multiplayer removed
-            //   this.otherPlayers.getChildren().forEach((otherPlayer) => {
-            //     if (playerId === otherPlayer.playerId) {
-            //       otherPlayer.destroy();
-            //     }
-            //   });
-            // });
+            this.socket.on('currentPlayers', (players) => {
+              console.log('Received currentPlayers:', players);
+              Object.keys(players).forEach((id) => {
+                if (players[id].id === this.socket.id) {
+                  console.log('Skipping local player in currentPlayers:', players[id].id);
+                  // Optionally, handle self-data if needed, or add own player to a group
+                } else {
+                  // Check if player already exists
+                  const existingPlayer = this.otherPlayers.getChildren().find(op => op.playerId === players[id].id);
+                  console.log('Processing player in currentPlayers:', players[id].id, 'Existing?', !!existingPlayer);
+
+                  if (!existingPlayer) {
+                    console.log('Adding new other player from currentPlayers:', players[id].id);
+                    // Add sprite for other players
+                    const otherPlayer = this.physics.add.sprite(players[id].x, players[id].y, 'player_spritesheet', 0); // Use 'player_spritesheet' or a different key if you want different sprites for others
+                    otherPlayer.playerId = players[id].id;
+                    otherPlayer.setScale(2); // Apply scaling if needed, consistent with local player
+                    this.otherPlayers.add(otherPlayer);
+                  } else {
+                    console.log('Updating existing other player from currentPlayers:', players[id].id);
+                    // Player already exists, update position
+                    existingPlayer.setPosition(players[id].x, players[id].y);
+                  }
+                }
+              });
+            });
+
+            this.socket.on('newPlayer', (playerInfo) => {
+              console.log('Received newPlayer:', playerInfo);
+              // Ensure not to add self if server broadcasts own connection as newPlayer
+              if (playerInfo.id !== this.socket.id) {
+                // Check if player already exists
+                const existingPlayer = this.otherPlayers.getChildren().find(op => op.playerId === playerInfo.id);
+                console.log('Processing newPlayer:', playerInfo.id, 'Existing?', !!existingPlayer);
+
+                if (!existingPlayer) {
+                  console.log('Adding new other player from newPlayer event:', playerInfo.id);
+                  const otherPlayer = this.physics.add.sprite(playerInfo.x, playerInfo.y, 'player_spritesheet', 0);
+                  otherPlayer.playerId = playerInfo.id;
+                  otherPlayer.setScale(2); // Apply scaling
+                  this.otherPlayers.add(otherPlayer);
+                } else {
+                  console.log('Updating existing other player from newPlayer event (should be rare):', playerInfo.id);
+                  // Player already exists, update position (though newPlayer typically means they weren't there)
+                  // This case might be redundant if server logic is perfect, but good for robustness
+                  existingPlayer.setPosition(playerInfo.x, playerInfo.y);
+                }
+              } else {
+                console.log('Skipping newPlayer event for local player:', playerInfo.id);
+              }
+            });
+
+            this.socket.on('playerMoved', (playerInfo) => {
+              console.log('Received playerMoved:', playerInfo);
+              this.otherPlayers.getChildren().forEach((otherPlayer) => {
+                if (playerInfo.id === otherPlayer.playerId) {
+                  console.log('Updating position for moved player:', playerInfo.id);
+                  otherPlayer.setPosition(playerInfo.x, playerInfo.y);
+                  // Potentially update animation/frame based on movement in future
+                }
+              });
+            });
+
+            this.socket.on('playerDisconnected', (playerId) => {
+              this.otherPlayers.getChildren().forEach((otherPlayer) => {
+                if (playerId === otherPlayer.playerId) {
+                  otherPlayer.destroy();
+                }
+              });
+            });
         }
 
         update() {
@@ -501,22 +514,22 @@
                 this.touchFlags.interactPressed = false;
             }
 
-            // --- Emit Player Movement --- // Multiplayer removed
-            // if (this.player && this.socket) { // Ensure player and socket exist
-            //   const x = this.player.x;
-            //   const y = this.player.y;
-            //   // const r = this.player.rotation; // If syncing rotation
-            //
-            //   if (this.player.oldPosition && (x !== this.player.oldPosition.x || y !== this.player.oldPosition.y /* || r !== this.player.oldPosition.rotation */)) {
-            //     this.socket.emit('playerMovement', { x: this.player.x, y: this.player.y /*, rotation: this.player.rotation */ });
-            //   }
-            //   // Store old position
-            //   this.player.oldPosition = {
-            //     x: this.player.x,
-            //     y: this.player.y,
-            //     // rotation: this.player.rotation
-            //   };
-            // }
+            // --- Emit Player Movement ---
+            if (this.player && this.socket) { // Ensure player and socket exist
+              const x = this.player.x;
+              const y = this.player.y;
+              // const r = this.player.rotation; // If syncing rotation
+
+              if (this.player.oldPosition && (x !== this.player.oldPosition.x || y !== this.player.oldPosition.y /* || r !== this.player.oldPosition.rotation */)) {
+                this.socket.emit('playerMovement', { x: this.player.x, y: this.player.y /*, rotation: this.player.rotation */ });
+              }
+              // Store old position
+              this.player.oldPosition = {
+                x: this.player.x,
+                y: this.player.y,
+                // rotation: this.player.rotation
+              };
+            }
         }
 
 
