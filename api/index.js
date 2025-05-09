@@ -358,9 +358,13 @@ app.get('/api/quiz', async (req, res) => {
     quizCache[cacheKey] = validEntries; // Update cache with only valid entries
 
     if (validEntries.length > 0) {
-      // Serve the most recently fetched valid quiz (it's at the beginning due to unshift)
-      const quizToServe = validEntries[0].data; // This data already has answers shuffled
-      console.log(`[API Server /api/quiz] Cache HIT for key: ${cacheKey} (topic: ${requestedTopic}). Serving version fetched at ${new Date(validEntries[0].fetchedAt).toISOString()}`);
+      // Randomly select one of the valid, non-expired quiz versions
+      const randomIndex = Math.floor(Math.random() * validEntries.length);
+      const quizToServeEntry = validEntries[randomIndex];
+      const quizToServe = quizToServeEntry.data; // This data already has answers shuffled
+
+      console.log(`[API Server /api/quiz] Cache HIT for key: ${cacheKey} (topic: ${requestedTopic}). Randomly serving 1 of ${validEntries.length} valid versions. Selected version fetched at ${new Date(quizToServeEntry.fetchedAt).toISOString()}`);
+      
       // Send a deep copy to prevent accidental modification of the cached object
       const cachedQuizCopy = JSON.parse(JSON.stringify(quizToServe));
       res.json(cachedQuizCopy);
