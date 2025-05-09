@@ -39,7 +39,7 @@
             // --- NPC Data ---
              this.npcs = [
                 { id: 'npc1', type: 'knowledge', dataId: 'lesson0', x: 150, y: 200, spriteKey: 'npc_info', sprite: null }, // Adjusted for 800x600 background, corrected spriteKey
-                { id: 'npc2', type: 'quiz', dataId: 'quiz4', x: 650, y: 200, spriteKey: 'npc_quiz', sprite: null } // Adjusted for 800x600 background
+                { id: 'npc2', type: 'quiz', dataId: 'AI_BITCOIN_QUIZ', x: 650, y: 200, spriteKey: 'npc_quiz', sprite: null } // Adjusted for 800x600 background
             ];
 
 
@@ -543,56 +543,62 @@
 
 
         // --- Load Question Function ---
-        loadQuestion(quizIndex, questionIndex) {
-            console.log(`Loading quiz ${quizIndex}, question ${questionIndex}`);
-            // Select the quiz data
-            const quiz = this.quizzes[quizIndex];
-            if (!quiz) {
-                console.error(`Quiz with index ${quizIndex} not found.`);
-                this.questionText.setText('Error: Quiz not found.');
-                this.quizIsActive = false;
+        loadQuestion(questionIndex) {
+            console.log("[Phaser] loadQuestion called. questionIndex:", questionIndex, "quizIsActive:", this.quizIsActive);
+            try {
+                console.log("[Phaser] this.currentQuizData at start of loadQuestion:", JSON.parse(JSON.stringify(this.currentQuizData || {})));
+            } catch (e) {
+                console.log("[Phaser] this.currentQuizData at start of loadQuestion (could not stringify):", this.currentQuizData);
+            }
+
+            if (!this.quizIsActive || !this.currentQuizData || !this.currentQuizData.questions || this.currentQuizData.questions.length === 0 || questionIndex < 0 || questionIndex >= this.currentQuizData.questions.length) {
+                console.error("[Phaser] loadQuestion: Invalid conditions to load question.");
+                console.error("[Phaser] Details - quizIsActive:", this.quizIsActive, "questionIndex:", questionIndex, "currentQuizData exists:", !!this.currentQuizData, "questions array exists:", !!(this.currentQuizData && this.currentQuizData.questions), "questions length:", (this.currentQuizData && this.currentQuizData.questions ? this.currentQuizData.questions.length : 'N/A'));
+                
+                if (this.quizIsActive) {
+                    this.endQuiz("Error: Question data not found or invalid.");
+                }
                 return;
             }
 
-            // Get the specific question data
-            const questionData = quiz.questions[questionIndex];
-            if (!questionData) {
-                console.error(`Question with index ${questionIndex} not found in quiz ${quizIndex}.`);
-                this.questionText.setText('Error: Question not found.');
-                this.quizIsActive = false;
+            this.currentQuestionData = this.currentQuizData.questions[questionIndex]; // Use this.currentQuizData
+            console.log("[Phaser] Loading question content:", this.currentQuestionData);
+            
+            if (!this.currentQuestionData || typeof this.currentQuestionData.q !== 'string' || !Array.isArray(this.currentQuestionData.a)) {
+                console.error("[Phaser] Malformed question data:", this.currentQuestionData);
+                this.endQuiz("Error: Malformed question data.");
                 return;
             }
 
-            // Store current question data and correct answer index
-            this.currentQuestionData = questionData;
-            this.currentCorrectAnswerIndex = questionData.a.indexOf(questionData.correct);
+            this.questionText.setText(this.currentQuestionData.q);
+            this.currentCorrectAnswerIndex = this.currentQuestionData.a.indexOf(this.currentQuestionData.correct);
+
             if (this.currentCorrectAnswerIndex === -1) {
-                 console.error(`Correct answer "${questionData.correct}" not found in options:`, questionData.a);
-                 // Handle error appropriately, maybe skip question or show an error message
-                 this.questionText.setText('Error: Invalid question data.');
-                 this.quizIsActive = false;
+                 console.error(`[Phaser] Correct answer "${this.currentQuestionData.correct}" not found in options:`, this.currentQuestionData.a);
+                 this.endQuiz('Error: Invalid question data (correct answer missing).');
                  return;
             }
 
-            // Update UI
-            this.questionText.setText(questionData.q);
-            this.answerTexts.forEach((text, index) => {
-                if (questionData.a[index] !== undefined) {
-                    // Remove the "A: " prefix, just show the answer text
-                    text.setText(questionData.a[index]);
+            this.answerTexts.forEach((textObj, i) => {
+                if (this.currentQuestionData.a[i] !== undefined) {
+                    textObj.setText(this.currentQuestionData.a[i]);
+                    textObj.setVisible(true);
+                    textObj.setFill('#fff');
                 } else {
-                    // If no answer, clear the text or set a placeholder if desired
-                    text.setText('-'); // Placeholder for missing answers
+                    textObj.setText(''); // Clear if no answer for this option
+                    textObj.setVisible(false);
                 }
             });
 
-            // Reset background color and start timer
-            this.cameras.main.setBackgroundColor('#000000');
-            this.startQuestionTimer(questionData.duration || 15); // Use question duration or default to 15s
-
-            // Set quiz active state
-            this.quizIsActive = true;
-            console.log("Question loaded, quiz active.");
+            const duration = this.currentQuestionData.duration || 15;
+            this.startQuestionTimer(duration);
+            
+            this.cameras.main.setBackgroundColor('#000000'); // Reset background
+            this.questionText.setVisible(true);
+            this.timerText.setVisible(true);
+            this.feedbackText.setVisible(false); // Clear previous feedback
+            // this.quizIsActive = true; // Already set before calling loadQuestion or should be set by caller
+            console.log("[Phaser] Question loaded successfully, quiz should be active.");
         }
 
 
@@ -632,87 +638,131 @@
         }
 
         // --- Answer Checking Function ---
-        checkAnswer() {
-            console.log("Checking answer...");
-            this.quizIsActive = false; // Stop movement, end the round temporarily
+        checkAnswer(timedOut = false) { // Parameter indicates if called due to timeout
+            if (!this.currentQuestionData) { // Simplified check: if no question data, can't check.
+                console.warn("checkAnswer called without currentQuestionData.");
+                if (this.quizIsActive) this.endQuiz("Error during quiz."); // End if was active.
+                return;
+            }
+            
+            // Stop further interactions for this question immediately
+            const wasActive = this.quizIsActive; // Store if it was active before this check
+            this.quizIsActive = false;
 
-            // Stop the timer if it's still running (e.g., player moved into zone before time expired)
             if (this.timerEvent) {
                 this.timerEvent.remove(false);
                 this.timerEvent = null;
-                console.log("Timer stopped manually during checkAnswer.");
             }
 
+            let playerOnCorrectPlatform = false;
+            // let chosenAnswerText = null; // Not strictly needed if only using playerOnCorrectPlatform
+            const correctAnswer = this.currentQuestionData.correct;
 
-            const playerX = this.player.x;
-            const playerY = this.player.y;
-            let playerZoneIndex = -1; // Default to -1 (no zone)
-
-            // Find which zone the player is in
-            for (let i = 0; i < this.answerZones.length; i++) {
-                if (Phaser.Geom.Rectangle.Contains(this.answerZones[i], playerX, playerY)) {
-                    playerZoneIndex = i;
-                    break; // Found the zone, no need to check others
+            this.answerZones.forEach((zone, index) => {
+                if (this.player && Phaser.Geom.Rectangle.Contains(zone, this.player.x, this.player.y)) {
+                    // chosenAnswerText = this.currentQuestionData.a[index];
+                    if (index === this.currentCorrectAnswerIndex) {
+                        playerOnCorrectPlatform = true;
+                    }
+                    // Highlight the platform player is on, regardless of correctness for now
+                    this.answerTexts[index].setFill('#ffff00');
                 }
+            });
+
+            if (timedOut) {
+                this.feedbackText.setText(`Time's up! Correct: ${correctAnswer}`).setFill('#ff9900').setVisible(true);
+            } else if (playerOnCorrectPlatform) {
+                this.feedbackText.setText('Correct!').setFill('#00ff00').setVisible(true);
+                if (wasActive) { // Only add score if quiz was active when answer was made
+                    this.playerScore += (this.currentQuizData.reward || 1);
+                }
+            } else { // Incorrect choice or didn't land on any platform if not timed out
+                this.feedbackText.setText(`Wrong! Correct: ${correctAnswer}`).setFill('#ff0000').setVisible(true);
+                
+                // Highlight the correct answer in green, and the chosen wrong answer (if any) in a different color.
+                this.answerTexts.forEach((textObj, idx) => {
+                    if (idx === this.currentCorrectAnswerIndex) {
+                        textObj.setFill('#00cc00'); // Correct answer green
+                    } else if (textObj.style.fill && typeof textObj.style.fill === 'string' && textObj.style.fill.toLowerCase() === '#ffff00') {
+                        // This was the one player selected (marked yellow previously) and it's wrong
+                        textObj.setFill('#ff6347'); // Tomato red for selected wrong answer
+                    } else {
+                        // Other incorrect, unselected options
+                        textObj.setFill('#d3d3d3'); // Light gray for other non-correct, non-selected
+                    }
+                });
             }
+            this.scoreText.setText('Sats: ' + this.playerScore);
 
-            // If time expired, playerZoneIndex might still be -1 if they weren't in a zone
-            if (this.remainingTime <= 0 && playerZoneIndex === -1) {
-                 console.log("Time expired, player not in any zone.");
-                 // Treat as incorrect if time runs out and player isn't in a zone
-            }
+            this.time.delayedCall(2500, () => {
+                this.feedbackText.setVisible(false);
+                this.answerTexts.forEach(textObj => textObj.setFill('#fff')); // Reset all answer text colors
 
-
-            const isCorrect = playerZoneIndex === this.currentCorrectAnswerIndex;
-
-            if (isCorrect) {
-                // --- Update Score ---
-                const reward = this.quizzes[0].reward || 10; // Get reward, default 10
-                this.playerScore += reward;
-                console.log('Correct! Score:', this.playerScore);
-                this.scoreText.setText('Sats: ' + this.playerScore); // Update score display
-                this.feedbackText.setText('Correct!').setColor('#00ff00').setVisible(true);
-            } else {
-                this.feedbackText.setText('Wrong!').setColor('#ff0000').setVisible(true);
-            }
-
-            console.log('Player was in zone:', playerZoneIndex, 'Correct zone:', this.currentCorrectAnswerIndex, 'Result:', isCorrect ? 'CORRECT' : 'INCORRECT');
-
-            // Show feedback
-             this.cameras.main.setBackgroundColor(isCorrect ? '#008000' : '#800000'); // Green for correct, Red for incorrect
-
-             // After a delay, load the next question or end the quiz
-             this.time.delayedCall(2000, () => {
-                 this.cameras.main.setBackgroundColor('#000000'); // Reset background
-                 this.feedbackText.setVisible(false); // Hide feedback text
-
-                 this.currentQuizQuestionIndex++; // Move to the next question index
-
-                 // Check if there are more questions in the current quiz (assuming quiz index 0 for now)
-                 const currentQuiz = this.quizzes[0]; // Assuming we are always on the first quiz for now
-                 if (this.currentQuizQuestionIndex < currentQuiz.questions.length) {
-                     // Load the next question
-                     this.loadQuestion(0, this.currentQuizQuestionIndex);
-                 } else {
-                     // Quiz finished
-                     console.log("Quiz finished!");
-                     this.questionText.setText('Quiz Finished!');
-                     this.answerTexts.forEach(text => text.setText('')); // Clear answer texts
-                     this.timerText.setText(''); // Clear timer text
-                     this.quizIsActive = false; // Keep quiz inactive
-                     // TODO: Add logic for what happens after the quiz (e.g., return to map, show score)
-                 }
-             });
+                this.currentQuizQuestionIndex++;
+                if (this.currentQuizData && this.currentQuizQuestionIndex < this.currentQuizData.questions.length) {
+                    this.quizIsActive = true; // Re-activate for the next question
+                    this.loadQuestion(this.currentQuizQuestionIndex);
+                } else {
+                    this.endQuiz();
+                }
+            });
         }
         // --- NPC Interaction Handling ---
+        endQuiz(reasonMessage = null) {
+            console.log("Ending quiz. Reason:", reasonMessage || "Normal completion.");
+            this.quizIsActive = false;
+
+            if (this.timerEvent) {
+                this.timerEvent.remove(false);
+                this.timerEvent = null;
+            }
+            
+            const finalScoreDisplay = this.currentQuizData ?
+                `Final Score: ${this.playerScore} Sats. (Topic: ${this.currentQuizData.topic})` :
+                `Final Sats: ${this.playerScore}`;
+
+            this.feedbackText.setText(reasonMessage || finalScoreDisplay).setFill('#00ffff').setVisible(true);
+
+            if (this.player) this.player.setVisible(true);
+            this.npcs.forEach(npc => { if (npc.sprite) npc.sprite.setVisible(true); });
+            this.otherPlayers.getChildren().forEach(op => op.setVisible(true));
+
+            this.questionText.setVisible(false);
+            this.answerTexts.forEach(text => text.setVisible(false));
+            this.timerText.setVisible(false);
+            
+            // Reset for next potential quiz
+            this.currentQuizData = null;
+            this.currentQuestionData = null;
+            this.currentQuizQuestionIndex = 0;
+
+            this.time.delayedCall(3500, () => { // Longer display for final message
+                this.feedbackText.setVisible(false);
+                this.currentNpcInteraction = null;
+            });
+        }
+        
+        // --- NPC Interaction Handling ---
         handleNpcInteraction(npc) {
+            if (this.quizIsActive || this.showingKnowledgeUI || this.showingQuizPromptUI) {
+                // If any UI is already active, or quiz is running, don't start a new interaction.
+                // This prevents overlapping UI if player mashes E or moves quickly between NPCs.
+                return;
+            }
+
             this.currentNpcInteraction = npc;
-            this.interactionPromptText.setVisible(false); // Hide prompt immediately
+            this.interactionPromptText.setVisible(false); // Hide "Press E" prompt
 
             if (npc.type === 'knowledge') {
                 this.showKnowledgeUI(npc.dataId);
             } else if (npc.type === 'quiz') {
-                this.showQuizPromptUI(npc.dataId);
+                // For AI quiz, we directly call startQuiz if that's the dataId
+                // Otherwise, show the prompt for regular quizzes.
+                if (npc.dataId === 'AI_BITCOIN_QUIZ') {
+                    this.startQuiz(npc.dataId); // Directly start the AI quiz
+                } else {
+                    this.showQuizPromptUI(npc.dataId); // Show prompt for other quizzes
+                }
             }
         }
 
@@ -774,40 +824,99 @@
             this.currentNpcInteraction = null;
         }
 
-        startQuiz(quizId) {
-            const quiz = this.quizzes.find(q => q.id === quizId);
-            if (!quiz) {
-                console.error("Quiz data not found for starting:", quizId); // Keep error logs
-                return;
-            }
+        async startQuiz(quizId) {
+            this.hideAllNpcUI(); // Hide any open NPC UI first
 
-            const cost = quiz.cost || 0;
+            if (quizId === 'AI_BITCOIN_QUIZ') {
+                try {
+                    this.questionText.setText('Fetching Bitcoin Quiz...').setVisible(true); // Show loading message
+                    const apiUrl = '/api/quiz?topic=Bitcoin&count=5';
+                    const response = await fetch(apiUrl);
+                    if (!response.ok) {
+                        const errorData = await response.json().catch(() => ({ message: `HTTP error! status: ${response.status}` }));
+                        throw new Error(errorData.message || `Failed to fetch AI quiz. Status: ${response.status}`);
+                    }
+                    const fetchedQuizData = await response.json();
 
-            if (this.playerScore >= cost) {
-                // Deduct cost
-                this.playerScore -= cost;
-                this.scoreText.setText('Sats: ' + this.playerScore);
+                    if (!fetchedQuizData || !fetchedQuizData.questions || fetchedQuizData.questions.length === 0) {
+                        this.feedbackText.setText('AI Bitcoin quiz not available. Try later.').setVisible(true);
+                        this.time.delayedCall(2500, () => {
+                            this.feedbackText.setVisible(false);
+                            this.questionText.setText('').setVisible(false); // Clear loading message
+                        });
+                        this.currentNpcInteraction = null;
+                        return;
+                    }
 
-                // Hide prompt UI
-                this.hideAllNpcUI();
+                    const aiQuizCost = 0; // AI quizzes are free
+                    // No need to check player score if cost is 0, but good practice if cost might change
+                    // this.playerScore -= aiQuizCost; // No deduction if free
+                    // this.scoreText.setText('Sats: ' + this.playerScore);
 
-                // Find the index of the quiz in the main array
-                const quizIndex = this.quizzes.findIndex(q => q.id === quizId);
-                if (quizIndex === -1) {
-                     console.error("Could not find index for quiz:", quizId); // Keep error logs
-                     return; // Should not happen if quiz was found earlier
+                    this.currentQuizData = {
+                        id: fetchedQuizData.id || 'AI_BITCOIN_QUIZ',
+                        topic: fetchedQuizData.topic || 'Bitcoin (AI)',
+                        questions: fetchedQuizData.questions,
+                        cost: aiQuizCost,
+                        reward: 5 // Example reward for AI quiz completion
+                    };
+                    this.quizIsActive = true;
+                    this.currentQuizQuestionIndex = 0;
+                    
+                    // Prepare UI for quiz
+                    // Player, NPCs, and other players remain visible during the quiz
+                    this.questionText.setVisible(true); // Already visible from loading message
+                    this.answerTexts.forEach(text => text.setVisible(true));
+                    this.timerText.setVisible(true);
+                    // Score text remains visible
+
+                    console.log("[Phaser] In startQuiz (AI), about to call loadQuestion. currentQuizQuestionIndex:", this.currentQuizQuestionIndex);
+                    console.log("[Phaser] In startQuiz (AI), this.currentQuizData:", JSON.parse(JSON.stringify(this.currentQuizData || {})));
+                    this.loadQuestion(this.currentQuizQuestionIndex);
+
+                } catch (error) {
+                    console.error('Error starting AI quiz:', error);
+                    this.questionText.setText('').setVisible(false); // Clear loading message
+                    this.feedbackText.setText(`Error: ${error.message || 'Could not load AI quiz.'}`).setVisible(true);
+                    this.time.delayedCall(3000, () => this.feedbackText.setVisible(false));
+                    this.currentNpcInteraction = null;
+                }
+            } else {
+                // Existing logic for predefined quizzes from this.quizzes
+                const selectedQuiz = this.quizzes.find(q => q.id === quizId);
+                if (!selectedQuiz) {
+                    console.error("Quiz data not found for starting:", quizId);
+                    this.showQuizPromptUI(quizId); // Re-show prompt if quiz is not found
+                    return;
                 }
 
-                // Reset question index and load first question
-                this.currentQuizQuestionIndex = 0;
-                this.loadQuestion(quizIndex, 0);
+                const cost = selectedQuiz.cost || 0;
+                if (this.playerScore >= cost) {
+                    this.playerScore -= cost;
+                    this.scoreText.setText('Sats: ' + this.playerScore);
 
-            } else {
-                // Optional: Show temporary "Not enough Sats" message
-                const insufficientText = this.add.text(400, 400, 'Not enough Sats!', { fontSize: '18px', fill: '#ff0000', backgroundColor: 'rgba(0,0,0,0.7)' }).setOrigin(0.5);
-                this.time.delayedCall(1500, () => {
-                    insufficientText.destroy();
-                });
+                    this.currentQuizData = selectedQuiz; // Set currentQuizData for loadQuestion
+                    this.quizIsActive = true;
+                    this.currentQuizQuestionIndex = 0;
+
+                    // Prepare UI for quiz
+                    // Player, NPCs, and other players remain visible during the quiz
+                    this.questionText.setVisible(true);
+                    this.answerTexts.forEach(text => text.setVisible(true));
+                    this.timerText.setVisible(true);
+                    // Score text remains visible
+
+                    console.log("[Phaser] In startQuiz (predefined), about to call loadQuestion. currentQuizQuestionIndex:", this.currentQuizQuestionIndex);
+                    console.log("[Phaser] In startQuiz (predefined), this.currentQuizData:", JSON.parse(JSON.stringify(this.currentQuizData || {})));
+                    this.loadQuestion(this.currentQuizQuestionIndex);
+
+                } else {
+                    this.feedbackText.setText(`Not enough Sats! Need ${cost}.`).setVisible(true);
+                    this.time.delayedCall(2000, () => {
+                        this.feedbackText.setVisible(false);
+                        this.showQuizPromptUI(quizId); // Re-show prompt if they can't afford
+                    });
+                }
             }
         }
     }
