@@ -30,13 +30,28 @@ Ready to test your Bitcoin knowledge? Play the latest version here:
 A core feature of Bitcoin Quest is the integration of dynamically generated quizzes powered by Google's Gemini AI.
 *   **Trigger:** Specific Non-Player Characters (NPCs), like the copper golem (`npc2`), are designated to provide AI-generated quizzes.
 *   **Content:** Currently, these quizzes focus on the topic of "Bitcoin" and consist of 5 questions.
-*   **Mechanism:**
-    1.  When the player interacts with the AI Quiz NPC, the Phaser game client (`www/js/index.js`) sends a request to the backend endpoint: `GET /api/quiz?topic=Bitcoin&count=5`.
-    2.  The backend server (`api/index.js`) receives this request and constructs a detailed prompt for the Gemini AI model.
-    3.  Gemini generates the quiz questions, options, and correct answers, returning them as a JSON payload (potentially wrapped in markdown, which the backend parses).
-    4.  The backend formats this into the game's standard quiz structure and sends it back to the Phaser client.
-    5.  The Phaser game then uses this data to run the quiz session using its existing UI and gameplay mechanics.
-*   **Benefit:** This provides a constantly fresh set of questions on Bitcoin, enhancing the replayability and learning experience, as players won't encounter the exact same predefined quiz repeatedly.
+*   **Mechanism & Caching Strategy:**
+    1.  **Request:** When the player interacts with an AI Quiz NPC, the Phaser client ([`www/js/index.js`](www/js/index.js:1)) requests a quiz from `GET /api/quiz` with `topic` and `count` parameters (e.g., `topic=Bitcoin&count=5`).
+    2.  **Cache Check (Server-Side - [`api/index.js`](api/index.js:1)):**
+        *   The server first checks its in-memory cache for valid (non-expired) versions of the requested quiz (topic & count).
+        *   The cache can store up to 10 different versions of a quiz for each unique topic/count combination. Each version has a 5-minute expiry from when it was fetched.
+        *   Answer options for all cached quizzes are pre-shuffled.
+        *   If a valid, non-expired version is found, the most recently fetched one is served immediately (with shuffled answers).
+    3.  **Cache Miss / Stale-While-Revalidate:**
+        *   If no valid cached version is found for the specific request:
+            *   The server *immediately* responds with a default, pre-defined "Bitcoin Basics" quiz (with its answer options shuffled on-the-fly). This ensures a fast user experience.
+            *   Simultaneously, in the background, the server triggers a call to the Gemini AI to generate the *actually requested* quiz (e.g., "Bitcoin", 5 questions).
+    4.  **Gemini AI Interaction (Background or Initial Cache Fill):**
+        *   The backend server ([`api/index.js`](api/index.js:1)) constructs a detailed prompt for the Gemini AI model.
+        *   Gemini generates the quiz (questions, options, correct answers) as JSON. The backend parses this, handling potential markdown wrapping.
+    5.  **Caching New Quiz & Answer Shuffling:**
+        *   The newly fetched quiz from Gemini has its answer options shuffled for each question.
+        *   This new, shuffled quiz version is then added to the cache for the specific topic/count, respecting the 10-version limit per key (oldest is removed if limit is exceeded).
+    6.  **Client-Side Quiz:** The Phaser game client receives the quiz data (either from cache or the default quiz) and runs the interactive quiz session.
+*   **Benefits:**
+    *   **Reduced Perceived Latency:** The "stale-while-revalidate" strategy with a default quiz ensures players get a quiz quickly, even if their specific request isn't cached.
+    *   **Variety & Replayability:** Caching multiple (up to 10) different AI-generated versions for each quiz type, combined with shuffling answer options, provides a fresh experience and prevents players from memorizing answer positions or question sets too easily.
+    *   **Efficient API Usage:** Caching reduces redundant calls to the Gemini API for frequently requested quiz types.
 
 ## Multiplayer with Socket.IO
 
