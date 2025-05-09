@@ -14,8 +14,9 @@ services:
       # - key: CLIENT_ORIGIN
       #   value: https://your-game-client-name.onrender.com
 
-  - type: static site # Your Phaser frontend
+  - type: web # Your Phaser frontend
     name: game-client
+    runtime: static
     staticPublishPath: www
     routes:
       - type: rewrite
