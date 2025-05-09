@@ -21,7 +21,7 @@ services:
     routes:
       - type: rewrite
         source: /api/:path* # Match any path starting with /api/
-        destination: http://game-api:3001/api/:path* # Proxy to game-api service
+        destination: http://game-api/api/:path* # Proxy to game-api service (Render handles port)
       - type: rewrite # Catch-all for SPA, MUST BE LAST
         source: /*
         destination: /index.html
