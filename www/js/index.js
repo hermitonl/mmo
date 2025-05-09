@@ -201,27 +201,32 @@
                 wordWrap: { width: 750 }
             }).setOrigin(0.5);
 
-            const answerStyle = { fontSize: '18px', fill: '#fff' };
-            const answerY = 500; // Lowered Y position for zones below
-            const answerZoneWidth = 100;
-            const answerZoneHeight = 100;
-            const answerZoneY = 450; // Y position for the top of the zones
+            const answerStyle = {
+                fontSize: '14px', // Slightly smaller font for better fit
+                fill: '#fff',
+                align: 'center',
+                wordWrap: { width: 90 } // Wrap text within platform width
+            };
+            // const answerY = 500; // No longer needed, text Y will be relative to platform
+            const answerZoneWidth = 100; // Platform width
+            const answerZoneHeight = 100; // Platform height
+            // const answerZoneY = 450; // No longer needed, platform Y comes from platformPositions
 
-            // Define Answer Zones (Rectangles) and Text
-            const zonePositions = [
-                { x: 100, textX: 150 }, // Zone A
-                { x: 300, textX: 350 }, // Zone B
-                { x: 500, textX: 550 }, // Zone C
-                { x: 700, textX: 750 }  // Zone D
+            // Define Answer Platform Positions (top-left corner for 100x100 platforms)
+            const platformPositions = [
+                { x: 275, y: 175 }, // Platform A (top-left of 2x2 grid)
+                { x: 425, y: 175 }, // Platform B (top-right of 2x2 grid)
+                { x: 275, y: 325 }, // Platform C (bottom-left of 2x2 grid)
+                { x: 425, y: 325 }  // Platform D (bottom-right of 2x2 grid)
             ];
 
             // Optional: Graphics for visualizing zones
             const graphics = this.add.graphics({ lineStyle: { width: 2, color: 0x00ff00 }, fillStyle: { color: 0x00ff00, alpha: 0.1 } });
 
-            zonePositions.forEach((pos, index) => {
+            platformPositions.forEach((pos, index) => {
                 const zone = new Phaser.Geom.Rectangle(
-                    pos.x,
-                    answerZoneY,
+                    pos.x, // Use platform's top-left x
+                    pos.y, // Use platform's top-left y
                     answerZoneWidth,
                     answerZoneHeight
                 );
@@ -231,8 +236,10 @@
                 graphics.strokeRectShape(zone);
                 graphics.fillRectShape(zone);
 
-
-                const answerText = this.add.text(pos.textX, answerY, String.fromCharCode(65 + index), answerStyle).setOrigin(0.5);
+                // Calculate text position to be centered on the platform
+                const textX = pos.x + answerZoneWidth / 2;
+                const textY = pos.y + answerZoneHeight / 2;
+                const answerText = this.add.text(textX, textY, String.fromCharCode(65 + index), answerStyle).setOrigin(0.5);
                 this.answerTexts.push(answerText);
             });
 
@@ -569,9 +576,11 @@
             this.questionText.setText(questionData.q);
             this.answerTexts.forEach((text, index) => {
                 if (questionData.a[index] !== undefined) {
-                    text.setText(`${String.fromCharCode(65 + index)}: ${questionData.a[index]}`);
+                    // Remove the "A: " prefix, just show the answer text
+                    text.setText(questionData.a[index]);
                 } else {
-                    text.setText(`${String.fromCharCode(65 + index)}: -`); // Handle cases with fewer than 4 answers
+                    // If no answer, clear the text or set a placeholder if desired
+                    text.setText('-'); // Placeholder for missing answers
                 }
             });
 
