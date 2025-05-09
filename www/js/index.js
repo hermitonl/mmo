@@ -56,25 +56,25 @@
                             q: 'What is the maximum supply of Bitcoin?',
                             a: ['21 million', '100 million', '1 billion', 'Unlimited'],
                             correct: '21 million',
-                            duration: 15 // Optional: Time limit per question
+                            duration: 10 // Optional: Time limit per question
                         },
                         {
                             q: 'Who is the pseudonymous creator of Bitcoin?',
                             a: ['Vitalik Buterin', 'Satoshi Nakamoto', 'Elon Musk', 'Craig Wright'],
                             correct: 'Satoshi Nakamoto',
-                            duration: 15
+                            duration: 10
                         },
                         {
                             q: 'What is the approximate block time for Bitcoin?',
                             a: ['1 minute', '10 minutes', '1 hour', '1 day'],
                             correct: '10 minutes',
-                            duration: 15
+                            duration: 10
                         },
                         {
                             q: 'What consensus mechanism does Bitcoin use?',
                             a: ['Proof of Stake', 'Proof of Authority', 'Proof of Work', 'Proof of Burn'],
                             correct: 'Proof of Work',
-                            duration: 15
+                            duration: 10
                         }
                     ]
                 }
@@ -196,7 +196,7 @@
             });
 
             // --- UI Text Elements ---
-            this.questionText = this.add.text(400, 50, 'Loading question...', {
+            this.questionText = this.add.text(400, 80, 'Welcome to hermitONL (Hermit Online)!', {
                 fontSize: '24px',
                 fill: '#fff',
                 align: 'center',
@@ -590,7 +590,7 @@
                 }
             });
 
-            const duration = this.currentQuestionData.duration || 15;
+            const duration = this.currentQuestionData.duration || 10;
             this.startQuestionTimer(duration);
             
             this.cameras.main.setBackgroundColor('#000000'); // Reset background
@@ -858,7 +858,7 @@
                         topic: fetchedQuizData.topic || 'Bitcoin (AI)',
                         questions: fetchedQuizData.questions,
                         cost: aiQuizCost,
-                        reward: 5 // Example reward for AI quiz completion
+                        reward: 1 // Example reward for AI quiz completion
                     };
                     this.quizIsActive = true;
                     this.currentQuizQuestionIndex = 0;
