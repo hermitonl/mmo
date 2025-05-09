@@ -10,14 +10,12 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
-       # You might need to set the client's URL for CORS if you restrict it later
-       # - key: CLIENT_ORIGIN
-       #   value: https://your-game-client-name.onrender.com
- 
-   - type: staticSite # Your Phaser frontend
-     name: game-client
-     # env: static # 'env' is not typically used for staticSite like this, type implies it.
-    # buildCommand: "" # Uncomment and set if you have a build step for www
+      # You might need to set the client's URL for CORS if you restrict it later
+      # - key: CLIENT_ORIGIN
+      #   value: https://your-game-client-name.onrender.com
+
+  - type: staticSite # Your Phaser frontend
+    name: game-client
     staticPublishPath: www
     routes:
       - type: rewrite
