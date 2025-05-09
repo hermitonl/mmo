@@ -7,6 +7,32 @@ const { Server } = require('socket.io');
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const { v4: uuidv4 } = require('uuid');
 
+// Cache for quiz data
+const quizCache = {};
+const CACHE_DURATION_MS = 5 * 60 * 1000; // 5 minutes
+
+const DEFAULT_BITCOIN_QUIZ_DATA = {
+  id: 'default-bitcoin-quiz-v1',
+  topic: 'Bitcoin Basics',
+  questions: [
+    {
+      q: "What is Bitcoin's maximum supply?",
+      a: ["21 million", "100 million", "1 billion", "Unlimited"],
+      correct: "21 million"
+    },
+    {
+      q: "Who is the creator of Bitcoin?",
+      a: ["Elon Musk", "Satoshi Nakamoto", "Vitalik Buterin", "Ada Lovelace"],
+      correct: "Satoshi Nakamoto"
+    },
+    {
+      q: "What consensus mechanism does Bitcoin use?",
+      a: ["Proof of Stake", "Proof of Work", "Proof of Authority", "Proof of History"],
+      correct: "Proof of Work"
+    }
+  ]
+};
+
 const app = express();
 
 // New VERY EARLY middleware
@@ -133,21 +159,10 @@ app.get('/api', (req, res) => {
   res.send('Hello from the API server!');
 });
 
-// New GET /api/quiz endpoint
-app.get('/api/quiz', async (req, res) => {
-  const { topic } = req.query;
-  const count = parseInt(req.query.count, 10) || 3; // Default to 3 questions
-
-  if (!topic) {
-    return res.status(400).json({ error: "Missing 'topic' query parameter" });
-  }
-
-  if (isNaN(count) || count <= 0 || count > 10) { // Max 10 questions for this endpoint
-    return res.status(400).json({ error: "Invalid 'count'. Must be a number between 1 and 10." });
-  }
-
-  const prompt = `Please generate a quiz about the topic: "${topic}".
-The quiz should consist of ${count} multiple-choice questions.
+async function fetchAndCacheQuiz(originalTopic, originalCount, cacheKey) {
+  console.log(`[API Server /api/quiz BACKGROUND] Starting fetch for topic: "${originalTopic}", count: ${originalCount}, cacheKey: ${cacheKey}`);
+  const prompt = `Please generate a quiz about the topic: "${originalTopic}".
+The quiz should consist of ${originalCount} multiple-choice questions.
 
 IMPORTANT INSTRUCTIONS FOR BREVITY, SIMPLICITY, AND UI COMPATIBILITY:
 - Each question MUST be a single, short sentence, ideally under 15 words.
@@ -179,17 +194,14 @@ Example of one question object:
 Please strictly adhere to this JSON format and ensure the output is only the JSON object itself, without any surrounding text or markdown.`;
 
   try {
-    // It's good practice to check if the API key is present before making a call
     if (!process.env.GEMINI_API_KEY) {
-      console.error("[API Server /api/quiz] CRITICAL: GEMINI_API_KEY is not set in the environment.");
-      return res.status(503).json({
-        error: "API service temporarily unavailable due to configuration issues.",
-        details: "The required API key for the generative AI service is missing."
-      });
+      console.error("[API Server /api/quiz BACKGROUND] CRITICAL: GEMINI_API_KEY is not set.");
+      // No res object here, just log and exit function for background task
+      return;
     }
 
     const generationConfig = {
-      temperature: 0.8, // Higher temperature for more creative/varied responses
+      temperature: 0.8,
     };
     const result = await model.generateContent({
       contents: [{ parts: [{ text: prompt }] }],
@@ -202,48 +214,37 @@ Please strictly adhere to this JSON format and ensure the output is only the JSO
     let parseErrorOccurred = false;
 
     try {
-      // Primary attempt: Parse the text directly as JSON
       quizData = JSON.parse(text);
-      console.log("[API Server /api/quiz] Successfully parsed AI response directly as JSON.");
+      console.log("[API Server /api/quiz BACKGROUND] Successfully parsed AI response directly as JSON.");
     } catch (initialParseError) {
-      console.warn("[API Server /api/quiz] Initial JSON.parse(text) failed:", initialParseError.message);
-      console.log("[API Server /api/quiz] Raw Gemini response (that failed initial parse):", text);
-      parseErrorOccurred = true; // Mark that we need to try the fallback
+      console.warn("[API Server /api/quiz BACKGROUND] Initial JSON.parse(text) failed:", initialParseError.message);
+      console.log("[API Server /api/quiz BACKGROUND] Raw Gemini response (that failed initial parse):", text);
+      parseErrorOccurred = true;
     }
 
     if (parseErrorOccurred) {
-      // Fallback attempt: Extract JSON from markdown code block
-      console.log("[API Server /api/quiz] Attempting fallback: extracting JSON from markdown code block.");
-      const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/s); // Added 's' flag for dotall
+      console.log("[API Server /api/quiz BACKGROUND] Attempting fallback: extracting JSON from markdown code block.");
+      const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/s);
       if (jsonMatch && jsonMatch[1]) {
         const extractedJson = jsonMatch[1].trim();
-        console.log("[API Server /api/quiz] Extracted potential JSON from markdown:", extractedJson);
+        console.log("[API Server /api/quiz BACKGROUND] Extracted potential JSON from markdown:", extractedJson);
         try {
           quizData = JSON.parse(extractedJson);
-          console.log("[API Server /api/quiz] Successfully parsed extracted JSON from markdown.");
+          console.log("[API Server /api/quiz BACKGROUND] Successfully parsed extracted JSON from markdown.");
         } catch (fallbackParseError) {
-          console.error("[API Server /api/quiz] Fallback JSON.parse(extractedJson) failed:", fallbackParseError);
-          console.error("[API Server /api/quiz] Trimmed extracted JSON that failed fallback parse:", extractedJson);
-          return res.status(500).json({
-            error: "Failed to parse quiz data from AI (fallback attempt).",
-            details: fallbackParseError.message,
-            rawResponse: text,
-            extractedJsonAttempt: extractedJson
-          });
+          console.error("[API Server /api/quiz BACKGROUND] Fallback JSON.parse(extractedJson) failed:", fallbackParseError.message);
+          console.error("[API Server /api/quiz BACKGROUND] Trimmed extracted JSON that failed fallback parse:", extractedJson);
+          return; // Exit if parsing fails
         }
       } else {
-        console.error("[API Server /api/quiz] Fallback failed: No JSON markdown code block found in AI response.");
-        return res.status(500).json({
-          error: "AI response was not valid JSON and no JSON markdown code block was found.",
-          rawResponse: text
-        });
+        console.error("[API Server /api/quiz BACKGROUND] Fallback failed: No JSON markdown code block found.");
+        return; // Exit if no JSON found
       }
     }
 
-    // Validate the structure of quizData
     if (!quizData || typeof quizData !== 'object' || !Array.isArray(quizData.questions)) {
-      console.error("[API Server /api/quiz] Parsed data is not in the expected format (missing 'questions' array):", quizData);
-      return res.status(500).json({ error: "AI response did not result in a valid quiz structure." });
+      console.error("[API Server /api/quiz BACKGROUND] Parsed data is not in the expected format:", quizData);
+      return;
     }
 
     const validatedQuestions = [];
@@ -259,40 +260,72 @@ Please strictly adhere to this JSON format and ensure the output is only the JSO
       ) {
         validatedQuestions.push({ q: q.q, a: q.a, correct: q.correct });
       } else {
-        console.warn("[API Server /api/quiz] Skipping malformed question from AI:", q);
+        console.warn("[API Server /api/quiz BACKGROUND] Skipping malformed question from AI:", q);
       }
     }
 
-    if (validatedQuestions.length === 0 && quizData.questions.length > 0) {
-        return res.status(500).json({ error: "All questions received from AI were malformed." });
-    }
-     if (validatedQuestions.length < count && quizData.questions.length > 0) {
-        console.warn(`[API Server /api/quiz] Requested ${count} questions, but only ${validatedQuestions.length} were valid after parsing and validation.`);
-    }
     if (validatedQuestions.length === 0) {
-        return res.status(500).json({ error: "No valid questions could be generated or parsed." });
+      console.error(`[API Server /api/quiz BACKGROUND] No valid questions could be generated or parsed for topic: ${originalTopic}.`);
+      return;
+    }
+     if (validatedQuestions.length < originalCount && quizData.questions.length > 0) {
+        console.warn(`[API Server /api/quiz BACKGROUND] Requested ${originalCount} questions for ${originalTopic}, but only ${validatedQuestions.length} were valid.`);
     }
 
 
     const quizId = uuidv4();
-    console.log(`[API Server /api/quiz] Successfully generated quiz ID: ${quizId} for topic: ${topic}`);
-    res.json({
+    const quizDataFromGemini = {
       id: quizId,
-      topic: topic,
+      topic: originalTopic, // Use the original requested topic here
       questions: validatedQuestions
-    });
+    };
+
+    quizCache[cacheKey] = {
+      data: quizDataFromGemini,
+      expiresAt: Date.now() + CACHE_DURATION_MS
+    };
+    console.log(`[API Server /api/quiz BACKGROUND] Cached new data for key: ${cacheKey}, topic: ${originalTopic}, expires at: ${new Date(quizCache[cacheKey].expiresAt).toISOString()}`);
 
   } catch (error) {
-    console.error("[API Server /api/quiz] Error generating quiz with Gemini:", error);
-    if (error.message && error.message.includes("API key not valid")) {
-        return res.status(500).json({ error: "Failed to generate quiz. API key is not valid. Please check server configuration."});
-    }
-    // Add a more specific check for Gemini API call failures
-    if (error.message && (error.message.includes("FETCH_ERROR") || error.message.includes("Deadline exceeded"))) {
-      return res.status(503).json({ error: "Failed to generate quiz. Could not connect to AI service.", details: error.message });
-    }
-    res.status(500).json({ error: "Failed to generate quiz due to an internal server error.", details: error.message });
+    console.error(`[API Server /api/quiz BACKGROUND] Error generating quiz for topic "${originalTopic}":`, error);
+    // Specific error logging for API key or connection issues can be added here if needed
   }
+}
+
+
+// New GET /api/quiz endpoint
+app.get('/api/quiz', async (req, res) => {
+  const { topic: requestedTopic } = req.query; // Renamed to avoid conflict
+  const count = parseInt(req.query.count, 10) || 3; // Default to 3 questions
+
+  if (!requestedTopic) {
+    return res.status(400).json({ error: "Missing 'topic' query parameter" });
+  }
+
+  if (isNaN(count) || count <= 0 || count > 10) { // Max 10 questions for this endpoint
+    return res.status(400).json({ error: "Invalid 'count'. Must be a number between 1 and 10." });
+  }
+
+  const cacheKey = `quiz-${requestedTopic}-${count}`;
+
+  // Check cache for the *requested* quiz
+  if (quizCache[cacheKey] && Date.now() < quizCache[cacheKey].expiresAt) {
+    console.log(`[API Server /api/quiz] Cache HIT for key: ${cacheKey} (topic: ${requestedTopic})`);
+    return res.json(quizCache[cacheKey].data);
+  }
+
+  // Cache MISS for the requested quiz
+  console.log(`[API Server /api/quiz] Cache MISS for key: ${cacheKey} (topic: ${requestedTopic}). Serving default quiz and fetching in background.`);
+  
+  // Immediately return the default Bitcoin quiz
+  res.json(DEFAULT_BITCOIN_QUIZ_DATA);
+
+  // Asynchronously fetch the *actually requested* quiz and cache it
+  fetchAndCacheQuiz(requestedTopic, count, cacheKey)
+    .catch(err => {
+      // Log errors from the background fetch, but don't crash the server or affect the response already sent
+      console.error(`[API Server /api/quiz BACKGROUND] Unhandled error during fetchAndCacheQuiz for ${cacheKey}:`, err);
+    });
 });
 
 // Endpoint to generate a quiz
