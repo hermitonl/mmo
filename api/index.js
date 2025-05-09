@@ -6,7 +6,7 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: "*", // Allow all origins for now, can be restricted later
+    origin: process.env.CLIENT_ORIGIN || "http://localhost:8080", // Allow deployed client and fallback for local
     methods: ["GET", "POST"]
   }
 });

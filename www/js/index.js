@@ -127,7 +127,7 @@
 
         create() {
             // --- Socket.IO Initialization ---
-            this.socket = io();
+            this.socket = io('https://game-api-c2gn.onrender.com');
             this.otherPlayers = this.physics.add.group();
 
             // --- Assumed dimensions for the new background ---
