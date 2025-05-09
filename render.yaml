@@ -1,0 +1,31 @@
+services:
+  - type: web # Your Node.js backend API
+    name: game-api
+    env: node
+    plan: free # Or your preferred plan on Render
+    region: singapore # Optional: choose a region close to your users
+    buildCommand: "npm install"
+    startCommand: "npm start"
+    healthCheckPath: /api # Using your existing /api route for health check
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # You might need to set the client's URL for CORS if you restrict it later
+      # - key: CLIENT_ORIGIN 
+      #   value: https://your-game-client-name.onrender.com 
+
+  - type: static # Your Phaser frontend
+    name: game-client
+    env: static
+    # buildCommand: "" # Uncomment and set if you have a build step for www
+    staticPublishPath: www
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    # If your game-api service gets a URL like game-api.onrender.com,
+    # you might need to set an environment variable for your static site
+    # to tell it where the API is, and then use that in www/js/index.js:
+    # envVars:
+    #   - key: REACT_APP_SOCKET_URL # Or VUE_APP_SOCKET_URL, or a generic name
+    #     value: https://game-api.onrender.com # The URL of your game-api service
