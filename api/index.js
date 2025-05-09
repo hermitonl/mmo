@@ -1,6 +1,7 @@
 console.log('[API Server Module] TOP OF FILE api/index.js loading/re-loading. Timestamp:', new Date().toISOString()); // New log
 require('dotenv').config(); // Load environment variables from .env file
 const express = require('express');
+const cors = require('cors'); // Add this line
 const http = require('http');
 const { Server } = require('socket.io');
 const { GoogleGenerativeAI } = require("@google/generative-ai");
@@ -44,6 +45,29 @@ if (process.env.CLIENT_ORIGIN) {
   console.log('CLIENT_ORIGIN not set, using default allowed origins.');
 }
 console.log('Allowed CORS origins:', allowedOrigins);
+
+// CORS configuration for Express
+const corsOptions = {
+  origin: function (origin, callback) {
+    // allow requests with no origin (like mobile apps or curl requests) or if origin is in allowedOrigins
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      console.error(`[API Server CORS] Error: Origin ${origin} not allowed by CORS policy.`);
+      callback(new Error(`Origin ${origin} not allowed by CORS`));
+    }
+  },
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], // Specify allowed methods
+  allowedHeaders: ['Content-Type', 'Authorization'], // Specify allowed headers
+  credentials: true // If your frontend needs to send cookies or auth headers
+};
+
+// Use CORS middleware for all Express routes
+app.use(cors(corsOptions));
+
+// Enable pre-flight requests for all routes
+app.options('*', cors(corsOptions));
+
 
 const io = new Server(server, {
   cors: {
