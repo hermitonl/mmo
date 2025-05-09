@@ -4,9 +4,34 @@ const { Server } = require('socket.io');
 
 const app = express();
 const server = http.createServer(app);
+const allowedOrigins = [
+  "https://game-client-7p87.onrender.com", // Your deployed client
+  "http://localhost:8080" // For local development
+];
+
+if (process.env.CLIENT_ORIGIN) {
+  console.log(`Using CLIENT_ORIGIN from env: ${process.env.CLIENT_ORIGIN}`);
+  // Ensure the env var is added if it's not already in the array
+  if (!allowedOrigins.includes(process.env.CLIENT_ORIGIN)) {
+    allowedOrigins.push(process.env.CLIENT_ORIGIN);
+  }
+} else {
+  console.log('CLIENT_ORIGIN not set, using default allowed origins.');
+}
+console.log('Allowed CORS origins:', allowedOrigins);
+
 const io = new Server(server, {
   cors: {
-    origin: process.env.CLIENT_ORIGIN || "http://localhost:8080", // Allow deployed client and fallback for local
+    origin: function (origin, callback) {
+      // Allow requests with no origin (like mobile apps or curl requests)
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.indexOf(origin) === -1) {
+        const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+        console.error(msg + ": " + origin);
+        return callback(new Error(msg));
+      }
+      return callback(null, true);
+    },
     methods: ["GET", "POST"]
   }
 });
@@ -57,6 +82,6 @@ app.get('/api', (req, res) => {
 // Vercel will typically handle starting the server.
 // For local development, you might add:
 const PORT = process.env.PORT || 3001;
-// server.listen(PORT, () => console.log(`Server listening on port ${PORT}`)); // Vercel handles listening
+server.listen(PORT, () => console.log(`Server listening on port ${PORT}`)); // Vercel handles listening
 
 module.exports = server; // Export the HTTP server instance for Vercel
