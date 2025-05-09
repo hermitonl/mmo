@@ -9,8 +9,10 @@ This project was developed for the **Amazon Q Developer "Quack The Code" Challen
 ## Play Online Now!
 
 Ready to test your Bitcoin knowledge? Play the latest version here:
-*   **Main Link:** [https://play.hermit.onl/](https://play.hermit.onl/)
-*   Backup Link: [https://phaser-beta.vercel.app/](https://phaser-beta.vercel.app/)
+*   **Multiplayer Link (Render.com):** [https://mmo.hermit.onl/](https://mmo.hermit.onl/)
+*   Backup Link (Render): [https://game-api-c2gn.onrender.com/](https://game-api-c2gn.onrender.com/)
+*   **Old Link (Vercel - Single Player):** [https://play.hermit.onl/](https://play.hermit.onl/)
+*   Backup Link (Vercel): [https://phaser-beta.vercel.app/](https://phaser-beta.vercel.app/)
 
 ## Key Features
 
@@ -196,6 +198,92 @@ Vercel's environment and routing handle the rest, so no IP addresses or specific
 **Backend Configuration for Vercel:**
 The `api/index.js` file exports the Express app (`module.exports = app;`). Vercel uses this to run the serverless function. The `server.listen(...)` call in `api/index.js` is primarily for local development; Vercel manages the listening process in its environment.
 
+## Render.com Deployment
+
+For a more traditional server environment that is well-suited for persistent WebSocket connections required by Socket.IO, Render.com is an excellent alternative to serverless platforms like Vercel for the backend. This setup involves deploying the backend API as a "Web Service" and the frontend as a "Static Site" on Render.
+
+**Why Render.com for Socket.IO?**
+
+*   **Persistent Services:** Render's "Web Services" run as long-lived server processes, which is ideal for Socket.IO's need to maintain active WebSocket connections with clients. This contrasts with serverless functions that are typically short-lived and don't maintain state or open connections between invocations.
+*   **Shared State:** A single, persistent server process on Render can maintain in-memory state (like our `players` object in `api/index.js`) that is accessible to all connected clients, which is crucial for multiplayer game state synchronization.
+*   **Simplified Configuration:** For applications like this, Render's model can be more straightforward for Socket.IO than adapting to serverless constraints (which often require external services like Redis for state and messaging).
+
+**Deployment Steps & Configuration:**
+
+The deployment to Render is managed via a `render.yaml` file in the root of the repository. This "Infrastructure as Code" approach defines the services to be created.
+
+1.  **`package.json` Preparation:**
+    *   Ensure `express` and `socket.io` are in `dependencies`.
+    *   A `scripts.start` command like `"start": "node api/index.js"` is defined.
+    *   An `engines` field specifying the Node.js version (e.g., `"node": "18.x"`) is recommended.
+    *   Remove any Cordova-specific dependencies if they are not needed for the web server deployment to keep the build clean.
+
+2.  **`api/index.js` (Backend) Configuration for Render:**
+    *   **Port:** The server must listen on the port provided by Render via `process.env.PORT`. The line `const PORT = process.env.PORT || 3001;` and `server.listen(PORT, ...);` in `api/index.js` handles this.
+    *   **CORS:** Configure Socket.IO CORS to allow connections from your deployed frontend URL (e.g., `https://mmo.hermit.onl/`). This is done by setting a `CLIENT_ORIGIN` environment variable on Render for the `game-api` service and using it in the `cors` options:
+        ```javascript
+        const io = new Server(server, {
+          cors: {
+            origin: process.env.CLIENT_ORIGIN || "http://localhost:8080", // Fallback for local
+            methods: ["GET", "POST"]
+          }
+        });
+        ```
+
+3.  **`www/js/index.js` (Frontend) Configuration for Render:**
+    *   The Socket.IO client must connect to the deployed backend API URL.
+        ```javascript
+        this.socket = io('https://game-api-c2gn.onrender.com');
+        // This should point to your deployed game-api service URL on Render.
+        ```
+
+4.  **`render.yaml` Configuration:**
+    This file defines two main services:
+    *   **`game-api` (Web Service):**
+        *   `type: web`
+        *   `env: node` (Node.js runtime)
+        *   `buildCommand: "npm install"`
+        *   `startCommand: "npm start"`
+        *   `healthCheckPath: /api` (uses the existing `/api` route for health checks)
+        *   `envVars`: Define `NODE_ENV: production` and `CLIENT_ORIGIN` (set to `https://mmo.hermit.onl/`).
+    *   **`game-client` (Static Site, deployed as a Web Service with static runtime):**
+        *   `type: web`
+        *   `runtime: static`
+        *   `staticPublishPath: www` (points to your frontend game files)
+        *   `routes`: Includes a rewrite rule (`source: /*`, `destination: /index.html`) for single-page application behavior.
+
+    Example structure:
+    ```yaml
+    services:
+      - type: web 
+        name: game-api
+        env: node
+        # ... other api config ...
+        envVars:
+          - key: NODE_ENV
+            value: production
+          - key: CLIENT_ORIGIN
+            value: https://mmo.hermit.onl
+      - type: web
+        name: game-client
+        runtime: static
+        staticPublishPath: www
+        routes:
+          - type: rewrite
+            source: /*
+            destination: /index.html
+        # ... other static site config ...
+    ```
+
+5.  **Deployment Process on Render.com:**
+    *   Commit all configuration files (`package.json`, `render.yaml`, updated `www/js/index.js`, `api/index.js`) to your Git repository.
+    *   On the Render dashboard, click "+ New" and select "Blueprint."
+    *   Connect your Git repository. Render will detect and parse `render.yaml`.
+    *   Review the services and approve their creation. Render will build and deploy them.
+    *   Ensure the `CLIENT_ORIGIN` environment variable for the `game-api` service (`https://game-api-c2gn.onrender.com`) is correctly set to `https://mmo.hermit.onl` on the Render dashboard.
+    *   After any code changes (like updating the Socket.IO URL in the client), pushing to your Git repository will trigger automatic redeployments.
+
+This setup provides a robust environment for your Socket.IO-based multiplayer game.
 ## Future Enhancements
 
 *   Expanded Bitcoin curriculum with more advanced topics.

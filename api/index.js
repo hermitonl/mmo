@@ -6,6 +6,7 @@ const app = express();
 const server = http.createServer(app);
 const allowedOrigins = [
   "https://game-client-7p87.onrender.com", // Your deployed client
+  "https://mmo.hermit.onl", // Custom domain of your deployed client
   "http://localhost:8080" // For local development
 ];
 
