@@ -112,6 +112,14 @@ app.get('/api/quiz', async (req, res) => {
 
   const prompt = `Please generate a quiz about the topic: "${topic}".
 The quiz should consist of ${count} multiple-choice questions.
+
+IMPORTANT INSTRUCTIONS FOR VARIETY AND CREATIVITY:
+- Ensure the questions are significantly different from previously generated questions on this topic. Aim for novelty.
+- Generate creative and non-repetitive questions.
+- The answer options should be diverse and include plausible, yet clearly incorrect, distractors.
+- Make the quiz engaging and fresh. Surprise me with the questions!
+
+JSON OUTPUT FORMAT REQUIREMENTS:
 Each question must have exactly 4 answer options.
 For each question, clearly indicate which of the 4 options is the correct answer.
 Return the entire quiz as a single JSON object. This JSON object should have a single key "questions", which is an array. Each element in the "questions" array should be an object with three keys:
@@ -124,10 +132,18 @@ Example of one question object:
   "q": "What is the capital of France?",
   "a": ["Berlin", "Madrid", "Paris", "Rome"],
   "correct": "Paris"
-}`;
+}
+
+Please strictly adhere to this JSON format and ensure the output is only the JSON object itself, without any surrounding text or markdown.`;
 
   try {
-    const result = await model.generateContent(prompt);
+    const generationConfig = {
+      temperature: 0.8, // Higher temperature for more creative/varied responses
+    };
+    const result = await model.generateContent({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig,
+    });
     const response = await result.response;
     const text = response.text();
 

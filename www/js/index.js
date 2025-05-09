@@ -718,7 +718,7 @@
             }
             
             const finalScoreDisplay = this.currentQuizData ?
-                `Final Score: ${this.playerScore} Sats. (Topic: ${this.currentQuizData.topic})` :
+                `Final Score: ${this.playerScore} Sats` :
                 `Final Sats: ${this.playerScore}`;
 
             this.feedbackText.setText(reasonMessage || finalScoreDisplay).setFill('#00ffff').setVisible(true);
