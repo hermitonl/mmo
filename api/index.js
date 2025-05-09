@@ -99,143 +99,17 @@ app.get('/api', (req, res) => {
 
 // New GET /api/quiz endpoint
 app.get('/api/quiz', async (req, res) => {
-  const { topic } = req.query;
-  const count = parseInt(req.query.count, 10) || 3; // Default to 3 questions
-
-  if (!topic) {
-    return res.status(400).json({ error: "Missing 'topic' query parameter" });
-  }
-
-  if (isNaN(count) || count <= 0 || count > 10) { // Max 10 questions for this endpoint
-    return res.status(400).json({ error: "Invalid 'count'. Must be a number between 1 and 10." });
-  }
-
-  const prompt = `Please generate a quiz about the topic: "${topic}".
-The quiz should consist of ${count} multiple-choice questions.
-
-IMPORTANT INSTRUCTIONS FOR VARIETY AND CREATIVITY:
-- Ensure the questions are significantly different from previously generated questions on this topic. Aim for novelty.
-- Generate creative and non-repetitive questions.
-- The answer options should be diverse and include plausible, yet clearly incorrect, distractors.
-- Make the quiz engaging and fresh. Surprise me with the questions!
-
-JSON OUTPUT FORMAT REQUIREMENTS:
-Each question must have exactly 4 answer options.
-For each question, clearly indicate which of the 4 options is the correct answer.
-Return the entire quiz as a single JSON object. This JSON object should have a single key "questions", which is an array. Each element in the "questions" array should be an object with three keys:
-1. "q": A string representing the question text.
-2. "a": An array of 4 strings, representing the answer options.
-3. "correct": A string that exactly matches one of the 4 answer options in the "a" array, indicating the correct answer.
-
-Example of one question object:
-{
-  "q": "What is the capital of France?",
-  "a": ["Berlin", "Madrid", "Paris", "Rome"],
-  "correct": "Paris"
-}
-
-Please strictly adhere to this JSON format and ensure the output is only the JSON object itself, without any surrounding text or markdown.`;
-
+  // Temporarily simplified for debugging proxy issues
+  console.log(`[API Server /api/quiz] SIMPLIFIED HANDLER. Query: topic=${req.query.topic}, count=${req.query.count}`);
   try {
-    const generationConfig = {
-      temperature: 0.8, // Higher temperature for more creative/varied responses
-    };
-    const result = await model.generateContent({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig,
-    });
-    const response = await result.response;
-    const text = response.text();
-
-    let quizData;
-    let parseErrorOccurred = false;
-
-    try {
-      // Primary attempt: Parse the text directly as JSON
-      quizData = JSON.parse(text);
-      console.log("[API Server] Successfully parsed AI response directly as JSON.");
-    } catch (initialParseError) {
-      console.warn("[API Server] Initial JSON.parse(text) failed:", initialParseError.message);
-      console.log("[API Server] Raw Gemini response (that failed initial parse):", text);
-      parseErrorOccurred = true; // Mark that we need to try the fallback
-    }
-
-    if (parseErrorOccurred) {
-      // Fallback attempt: Extract JSON from markdown code block
-      console.log("[API Server] Attempting fallback: extracting JSON from markdown code block.");
-      const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/s); // Added 's' flag for dotall
-      if (jsonMatch && jsonMatch[1]) {
-        const extractedJson = jsonMatch[1].trim();
-        console.log("[API Server] Extracted potential JSON from markdown:", extractedJson);
-        try {
-          quizData = JSON.parse(extractedJson);
-          console.log("[API Server] Successfully parsed extracted JSON from markdown.");
-        } catch (fallbackParseError) {
-          console.error("[API Server] Fallback JSON.parse(extractedJson) failed:", fallbackParseError);
-          console.error("[API Server] Trimmed extracted JSON that failed fallback parse:", extractedJson);
-          return res.status(500).json({
-            error: "Failed to parse quiz data from AI (fallback attempt).",
-            details: fallbackParseError.message,
-            rawResponse: text,
-            extractedJsonAttempt: extractedJson
-          });
-        }
-      } else {
-        console.error("[API Server] Fallback failed: No JSON markdown code block found in AI response.");
-        return res.status(500).json({
-          error: "AI response was not valid JSON and no JSON markdown code block was found.",
-          rawResponse: text
-        });
-      }
-    }
-
-    // Validate the structure of quizData
-    if (!quizData || typeof quizData !== 'object' || !Array.isArray(quizData.questions)) {
-      console.error("Parsed data is not in the expected format (missing 'questions' array):", quizData);
-      return res.status(500).json({ error: "AI response did not result in a valid quiz structure." });
-    }
-
-    const validatedQuestions = [];
-    for (const q of quizData.questions) {
-      if (
-        q &&
-        typeof q.q === 'string' &&
-        Array.isArray(q.a) &&
-        q.a.length === 4 &&
-        q.a.every(opt => typeof opt === 'string') &&
-        typeof q.correct === 'string' &&
-        q.a.includes(q.correct)
-      ) {
-        validatedQuestions.push({ q: q.q, a: q.a, correct: q.correct });
-      } else {
-        console.warn("Skipping malformed question from AI:", q);
-      }
-    }
-
-    if (validatedQuestions.length === 0 && quizData.questions.length > 0) {
-        return res.status(500).json({ error: "All questions received from AI were malformed." });
-    }
-     if (validatedQuestions.length < count && quizData.questions.length > 0) {
-        console.warn(`Requested ${count} questions, but only ${validatedQuestions.length} were valid after parsing and validation.`);
-    }
-    if (validatedQuestions.length === 0) {
-        return res.status(500).json({ error: "No valid questions could be generated or parsed." });
-    }
-
-
-    const quizId = uuidv4();
     res.json({
-      id: quizId,
-      topic: topic,
-      questions: validatedQuestions
+      message: "This is a test response from the simplified /api/quiz endpoint.",
+      topicReceived: req.query.topic,
+      countReceived: req.query.count
     });
-
-  } catch (error) {
-    console.error("Error generating quiz with Gemini:", error);
-    if (error.message && error.message.includes("API key not valid")) {
-        return res.status(500).json({ error: "Failed to generate quiz. API key is not valid. Please check server configuration."});
-    }
-    res.status(500).json({ error: "Failed to generate quiz due to an internal server error.", details: error.message });
+  } catch (e) {
+    console.error('[API Server /api/quiz] Error in SIMPLIFIED handler:', e);
+    res.status(500).json({ error: "Error in simplified /api/quiz", details: e.message });
   }
 });
 
