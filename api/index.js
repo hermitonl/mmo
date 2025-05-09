@@ -149,6 +149,12 @@ app.get('/api/quiz', async (req, res) => {
   const prompt = `Please generate a quiz about the topic: "${topic}".
 The quiz should consist of ${count} multiple-choice questions.
 
+IMPORTANT INSTRUCTIONS FOR BREVITY, SIMPLICITY, AND UI COMPATIBILITY:
+- Each question MUST be a single, short sentence, ideally under 15 words.
+- Each of the 4 answer options MUST also be very short and concise, ideally just a few words or a short phrase (e.g., under 5 words per option).
+- Use simple language. Avoid complex sentence structures or jargon where possible.
+- The total length of the question and its four answers should be minimized to fit well in a game UI.
+
 IMPORTANT INSTRUCTIONS FOR VARIETY AND CREATIVITY:
 - Ensure the questions are significantly different from previously generated questions on this topic. Aim for novelty.
 - Generate creative and non-repetitive questions.
