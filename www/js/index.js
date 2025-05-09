@@ -38,8 +38,8 @@
 
             // --- NPC Data ---
              this.npcs = [
-                { id: 'npc1', type: 'knowledge', dataId: 'lesson0', x: 150, y: 150, spriteKey: 'npc_knowledge', sprite: null }, // Adjusted for 800x600 background
-                { id: 'npc2', type: 'quiz', dataId: 'quiz4', x: 650, y: 150, spriteKey: 'npc_quiz', sprite: null } // Adjusted for 800x600 background
+                { id: 'npc1', type: 'knowledge', dataId: 'lesson0', x: 150, y: 200, spriteKey: 'npc_info', sprite: null }, // Adjusted for 800x600 background, corrected spriteKey
+                { id: 'npc2', type: 'quiz', dataId: 'quiz4', x: 650, y: 200, spriteKey: 'npc_quiz', sprite: null } // Adjusted for 800x600 background
             ];
 
 
@@ -116,6 +116,8 @@
             // this.load.image('npc_quiz', 'img/cordova-small.png'); // Placeholder
             this.load.spritesheet('player_spritesheet', 'img/characters/RPG_assets.png', { frameWidth: 15, frameHeight: 15 });
             this.load.image('npc_sprite', 'img/characters/dark-ent.png');
+            this.load.image('npc_quiz', 'img/characters/coppergolem.png');
+            this.load.image('npc_info', 'img/characters/dark-ent.png');
             // Comment out old background image
             this.load.image('newBackground', 'img/mainroom_bg.png');
             // Load new tilemap assets
@@ -184,7 +186,7 @@
 
             // --- Spawn NPCs ---
             this.npcs.forEach(npc => {
-                const npcSprite = this.physics.add.staticSprite(npc.x, npc.y, 'npc_sprite'); // Use new NPC sprite
+                const npcSprite = this.physics.add.staticSprite(npc.x, npc.y, npc.spriteKey); // Use specific spriteKey from NPC data
                 npc.sprite = npcSprite; // Store sprite reference
                 npcSprite.setScale(2); // Scale up new NPC sprite
                 npcSprite.body.setSize(20, 20); // Set explicit physics size, new sprite is 20x20
