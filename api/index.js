@@ -12,27 +12,36 @@ const quizCache = {};
 const CACHE_DURATION_MS = 5 * 60 * 1000; // 5 minutes
 const MAX_QUIZ_VERSIONS_PER_KEY = 10; // Store up to 10 different versions of a quiz for the same topic/count
 
-const DEFAULT_BITCOIN_QUIZ_DATA = {
-  id: 'default-bitcoin-quiz-v1',
-  topic: 'Bitcoin Basics',
-  questions: [
-    {
-      q: "What is Bitcoin's maximum supply?",
-      a: ["21 million", "100 million", "1 billion", "Unlimited"],
-      correct: "21 million"
-    },
-    {
-      q: "Who is the creator of Bitcoin?",
-      a: ["Elon Musk", "Satoshi Nakamoto", "Vitalik Buterin", "Ada Lovelace"],
-      correct: "Satoshi Nakamoto"
-    },
-    {
-      q: "What consensus mechanism does Bitcoin use?",
-      a: ["Proof of Stake", "Proof of Work", "Proof of Authority", "Proof of History"],
-      correct: "Proof of Work"
-    }
-  ]
-};
+const DEFAULT_QUIZZES_LIST = [
+  {
+    id: 'default-bitcoin-quiz-v1',
+    topic: 'Bitcoin Basics',
+    questions: [
+      { q: "What is Bitcoin's maximum supply?", a: ["21 million", "100 million", "1 billion", "Unlimited"], correct: "21 million" },
+      { q: "Who is the creator of Bitcoin?", a: ["Elon Musk", "Satoshi Nakamoto", "Vitalik Buterin", "Ada Lovelace"], correct: "Satoshi Nakamoto" },
+      { q: "What consensus mechanism does Bitcoin use?", a: ["Proof of Stake", "Proof of Work", "Proof of Authority", "Proof of History"], correct: "Proof of Work" }
+    ]
+  },
+  {
+    id: 'default-lightning-quiz-v1',
+    topic: 'Lightning Network Intro',
+    questions: [
+      { q: "What is the Lightning Network primarily for?", a: ["Storing Bitcoin", "Fast, cheap Bitcoin txs", "Mining Bitcoin", "Issuing new tokens"], correct: "Fast, cheap Bitcoin txs" },
+      { q: "Lightning Network operates as a ___ layer.", a: ["Base", "Second", "Third", "Sidechain"], correct: "Second" },
+      { q: "What are payment channels in Lightning?", a: ["Email addresses", "Two-party ledgers", "Public blockchains", "Centralized servers"], correct: "Two-party ledgers" }
+    ]
+  },
+  {
+    id: 'default-crypto-concepts-v1',
+    topic: 'General Crypto Concepts',
+    questions: [
+      { q: "What does 'DeFi' stand for?", a: ["Decentralized Finance", "Digital Finance", "Default Finance", "Defined Finance"], correct: "Decentralized Finance" },
+      { q: "What is a 'private key' in crypto?", a: ["A public address", "A password for an exchange", "A secret code to access funds", "A type of cryptocurrency"], correct: "A secret code to access funds" },
+      { q: "What is 'blockchain'?", a: ["A type of coin", "A distributed ledger", "A crypto exchange", "A wallet software"], correct: "A distributed ledger" }
+    ]
+  }
+  // Add more default quizzes here if desired
+];
 
 const app = express();
 
@@ -364,16 +373,21 @@ app.get('/api/quiz', async (req, res) => {
   }
 
   // Cache MISS for the requested quiz (or all versions expired)
-  console.log(`[API Server /api/quiz] Cache MISS for key: ${cacheKey} (topic: ${requestedTopic}). Serving default quiz (with shuffled answers) and fetching in background.`);
+  console.log(`[API Server /api/quiz] Cache MISS for key: ${cacheKey} (topic: ${requestedTopic}). Serving a RANDOMLY SELECTED default quiz (with shuffled answers) and fetching in background.`);
   
-  // Create a deep copy of the default quiz to shuffle its answers without modifying the original
-  const defaultQuizCopy = JSON.parse(JSON.stringify(DEFAULT_BITCOIN_QUIZ_DATA));
+  // Select a random default quiz from the list
+  const randomDefaultQuizIndex = Math.floor(Math.random() * DEFAULT_QUIZZES_LIST.length);
+  const selectedDefaultQuiz = DEFAULT_QUIZZES_LIST[randomDefaultQuizIndex];
+
+  // Create a deep copy of the selected default quiz to shuffle its answers
+  const defaultQuizCopy = JSON.parse(JSON.stringify(selectedDefaultQuiz));
   defaultQuizCopy.questions.forEach(question => {
     if (question.a && Array.isArray(question.a)) {
       shuffleArray(question.a);
     }
   });
-  // Immediately return the default Bitcoin quiz with shuffled answers
+  // Immediately return the randomly selected, shuffled default quiz
+  console.log(`[API Server /api/quiz] Serving randomly selected default quiz: "${defaultQuizCopy.topic}" (ID: ${defaultQuizCopy.id})`);
   res.json(defaultQuizCopy);
 
   // Asynchronously fetch the *actually requested* quiz and cache it (fetchAndCacheQuiz will also shuffle answers)
