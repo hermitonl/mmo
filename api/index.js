@@ -35,6 +35,14 @@ const DEFAULT_BITCOIN_QUIZ_DATA = {
 
 const app = express();
 
+// Helper function to shuffle an array (Fisher-Yates shuffle)
+function shuffleArray(array) {
+  for (let i = array.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [array[i], array[j]] = [array[j], array[i]]; // Swap elements
+  }
+}
+
 // New VERY EARLY middleware
 app.use((req, res, next) => {
   const timestamp = new Date().toISOString();
@@ -274,14 +282,22 @@ Please strictly adhere to this JSON format and ensure the output is only the JSO
 
 
     const quizId = uuidv4();
+
+    // Shuffle answers for each question before caching
+    validatedQuestions.forEach(question => {
+      if (question.a && Array.isArray(question.a)) {
+        shuffleArray(question.a);
+      }
+    });
+
     const quizDataFromGemini = {
       id: quizId,
       topic: originalTopic, // Use the original requested topic here
-      questions: validatedQuestions
+      questions: validatedQuestions // Now with shuffled answers
     };
 
     quizCache[cacheKey] = {
-      data: quizDataFromGemini,
+      data: quizDataFromGemini, // Store the version with shuffled answers
       expiresAt: Date.now() + CACHE_DURATION_MS
     };
     console.log(`[API Server /api/quiz BACKGROUND] Cached new data for key: ${cacheKey}, topic: ${originalTopic}, expires at: ${new Date(quizCache[cacheKey].expiresAt).toISOString()}`);
@@ -311,16 +327,26 @@ app.get('/api/quiz', async (req, res) => {
   // Check cache for the *requested* quiz
   if (quizCache[cacheKey] && Date.now() < quizCache[cacheKey].expiresAt) {
     console.log(`[API Server /api/quiz] Cache HIT for key: ${cacheKey} (topic: ${requestedTopic})`);
-    return res.json(quizCache[cacheKey].data);
+    // Data in cache should already have answers shuffled by fetchAndCacheQuiz
+    // Send a deep copy to prevent accidental modification of the cached object
+    const cachedQuizCopy = JSON.parse(JSON.stringify(quizCache[cacheKey].data));
+    return res.json(cachedQuizCopy);
   }
 
   // Cache MISS for the requested quiz
-  console.log(`[API Server /api/quiz] Cache MISS for key: ${cacheKey} (topic: ${requestedTopic}). Serving default quiz and fetching in background.`);
+  console.log(`[API Server /api/quiz] Cache MISS for key: ${cacheKey} (topic: ${requestedTopic}). Serving default quiz (with shuffled answers) and fetching in background.`);
   
-  // Immediately return the default Bitcoin quiz
-  res.json(DEFAULT_BITCOIN_QUIZ_DATA);
+  // Create a deep copy of the default quiz to shuffle its answers without modifying the original
+  const defaultQuizCopy = JSON.parse(JSON.stringify(DEFAULT_BITCOIN_QUIZ_DATA));
+  defaultQuizCopy.questions.forEach(question => {
+    if (question.a && Array.isArray(question.a)) {
+      shuffleArray(question.a);
+    }
+  });
+  // Immediately return the default Bitcoin quiz with shuffled answers
+  res.json(defaultQuizCopy);
 
-  // Asynchronously fetch the *actually requested* quiz and cache it
+  // Asynchronously fetch the *actually requested* quiz and cache it (fetchAndCacheQuiz will also shuffle answers)
   fetchAndCacheQuiz(requestedTopic, count, cacheKey)
     .catch(err => {
       // Log errors from the background fetch, but don't crash the server or affect the response already sent
