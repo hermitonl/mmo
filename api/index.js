@@ -575,7 +575,7 @@ Do not provide any preamble or explanation of these rules in your response. Just
   try {
     const generationConfig = {
       temperature: 0.7, // Adjust for desired creativity/factuality balance
-      maxOutputTokens: 2048, // Further increased token limit
+      maxOutputTokens: 5048, // Further increased token limit 2048
     };
     const result = await model.generateContent({
       contents: [{ parts: [{ text: prompt }] }],
