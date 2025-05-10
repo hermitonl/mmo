@@ -10,7 +10,7 @@ This project was developed for the **Amazon Q Developer "Quack The Code" Challen
 
 Ready to test your Bitcoin knowledge? Play the latest version here:
 *   **Multiplayer Link (Render.com):** [https://mmo.hermit.onl/](https://mmo.hermit.onl/)
-*   **API Server (Render):** [https://game-api-c2gn.onrender.com/](https://game-api-c2gn.onrender.com/) (This is the backend API endpoint used by the game client.)
+*   **Backup (Render):** [https://game-client-7p87.onrender.com/](https://game-client-7p87.onrender.com/) (This is the original game client.)
 *   **Old Link (Vercel - Single Player):** [https://play.hermit.onl/](https://play.hermit.onl/) (Archived/Older Single-Player Version)
 *   Backup Link (Vercel): [https://phaser-beta.vercel.app/](https://phaser-beta.vercel.app/)
 
