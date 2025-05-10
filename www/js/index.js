@@ -228,12 +228,17 @@
             // this.load.tilemapTiledJSON('map', 'assets/map/map.json');
             // Load interact button image
             this.load.image('interact_button', 'img/icons/target.png'); // Using target.png for interact
+            this.load.audio('background_music', 'assets/music/audio/hytopia-main.mp3');
         }
 
         create() {
             // --- Socket.IO Initialization ---
             this.socket = io('https://game-api-c2gn.onrender.com');
             this.otherPlayers = this.physics.add.group();
+
+            // --- Background Music ---
+            this.music = this.sound.add('background_music', { loop: true, volume: 0.5 });
+            this.music.play();
 
             // --- Assumed dimensions for the new background ---
             // Dimensions of the background image, confirmed by user.
