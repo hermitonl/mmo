@@ -39,7 +39,8 @@
             // --- NPC Data ---
              this.npcs = [
                 { id: 'npc1', type: 'knowledge', dataId: 'lesson0', x: 150, y: 200, spriteKey: 'npc_info', sprite: null }, // Adjusted for 800x600 background, corrected spriteKey
-                { id: 'npc2', type: 'quiz', dataId: 'AI_BITCOIN_QUIZ', x: 650, y: 200, spriteKey: 'npc_quiz', sprite: null } // Adjusted for 800x600 background
+                { id: 'npc2', type: 'quiz', dataId: 'AI_BITCOIN_QUIZ', x: 650, y: 200, spriteKey: 'npc_quiz', sprite: null }, // Adjusted for 800x600 background
+                { id: 'npc_demon', type: 'demon_chat', x: 300, y: 500, spriteKey: 'demon_npc', sprite: null }
             ];
 
 
@@ -106,6 +107,17 @@
             this.currentNpcInteraction = null; // Store the npc object being interacted with
             this.knowledgeContainer = null; // UI Container for knowledge
             this.quizPromptContainer = null; // UI Container for quiz prompt
+
+            // --- Chat UI State ---
+            this.showingChatUI = false;
+            this.gamePausedForChat = false; // To control player movement etc.
+            this.chatUIDiv = null;
+            this.chatHistoryDiv = null;
+            this.chatInputElement = null;
+            this.chatSendButton = null;
+            this.chatCloseButton = null;
+            this.currentNpcChatTarget = null; // To remember which NPC we are chatting with
+            this.currentPlayerId = "defaultPlayer"; // Hardcoded player ID for now
         }
 
         preload() {
@@ -118,6 +130,7 @@
             this.load.image('npc_sprite', 'img/characters/dark-ent.png');
             this.load.image('npc_quiz', 'img/characters/coppergolem.png');
             this.load.image('npc_info', 'img/characters/dark-ent.png');
+            this.load.image('demon_npc', 'img/characters/demon.png'); // Load demon NPC image
             // Comment out old background image
             this.load.image('newBackground', 'img/mainroom_bg.png');
             // Load new tilemap assets
@@ -427,6 +440,28 @@
                 }
               });
             });
+
+            // --- Get Chat UI DOM Elements ---
+            this.chatUIDiv = document.getElementById('chat-ui');
+            this.chatHistoryDiv = document.getElementById('chat-history');
+            this.chatInputElement = document.getElementById('chat-input');
+            this.chatSendButton = document.getElementById('chat-send-button');
+            this.chatCloseButton = document.getElementById('chat-close-button');
+
+            // --- Chat UI Event Listeners ---
+            if (this.chatUIDiv && this.chatSendButton && this.chatCloseButton && this.chatInputElement) { // Ensure all main elements exist
+                this.chatSendButton.addEventListener('click', () => this.handleChatSend());
+                this.chatCloseButton.addEventListener('click', () => this.hideChatUI());
+                this.chatInputElement.addEventListener('keydown', (event) => { // Changed to keydown
+                    if (event.key === 'Enter') {
+                        event.preventDefault(); // Prevent default form submission for Enter
+                        this.handleChatSend();
+                    }
+                    // Allow other keys, including space, to function normally by not calling preventDefault
+                });
+            } else {
+                console.error("One or more chat UI elements could not be found during setup.");
+            }
         }
 
         update() {
@@ -434,28 +469,33 @@
             const interactionRange = 50; // Max distance to show interaction prompt
             const uiCloseRange = 100; // Max distance before UI closes automatically
 
-            // --- Interaction Logic ---
-            let currentClosestNpc = null; // Use a temporary variable for this frame's check
+            if (this.showingChatUI || this.gamePausedForChat) {
+                if (this.player) {
+                    this.player.setVelocity(0); // Explicitly stop player
+                }
+                // Phaser keyboard input is disabled/enabled in showChatUI/hideChatUI.
+            }
 
-            if (!this.showingKnowledgeUI && !this.showingQuizPromptUI && !this.quizIsActive) { // Only check for new interactions if no UI is open and quiz isn't running
+            // --- Interaction Logic ---
+            let currentClosestNpc = null;
+            // Only check for new interactions if no UI is open and no quiz/chat is active
+            if (!this.showingKnowledgeUI && !this.showingQuizPromptUI && !this.quizIsActive && !this.showingChatUI) {
                  let minDist = interactionRange;
                  this.npcs.forEach(npc => {
                     if (npc.sprite) { // Ensure sprite exists
                         const distance = Phaser.Math.Distance.Between(this.player.x, this.player.y, npc.sprite.x, npc.sprite.y);
                         if (distance < minDist) {
                             minDist = distance;
-                            currentClosestNpc = npc; // Update temp variable
+                            currentClosestNpc = npc;
                         }
                     }
                 });
-                 // Update the main state variable ONLY if we were actively checking
                  this.closestNpc = currentClosestNpc;
             }
-            // If UI is showing or quiz is active, this.closestNpc retains its value from the last valid check
+            // If a UI is showing or quiz/chat is active, this.closestNpc retains its value from the last valid check
 
-
-            // Show/Hide Interaction Prompt (Based on the potentially updated this.closestNpc)
-            if (this.closestNpc && !this.showingKnowledgeUI && !this.showingQuizPromptUI && !this.quizIsActive) {
+            // Show/Hide Interaction Prompt
+            if (this.closestNpc && !this.showingKnowledgeUI && !this.showingQuizPromptUI && !this.quizIsActive && !this.showingChatUI) {
                 this.interactionPromptText.setPosition(this.player.x, this.player.y - 30).setVisible(true);
             } else {
                 this.interactionPromptText.setVisible(false);
@@ -465,57 +505,14 @@
             const justPressedE = Phaser.Input.Keyboard.JustDown(this.interactKey);
             const justTouchedInteract = this.touchFlags.interactPressed;
 
-            if (justPressedE || justTouchedInteract) {
+            if ((justPressedE || justTouchedInteract) && !this.showingChatUI) { // Ensure chat is not active for these game interactions
                 if (this.showingQuizPromptUI && this.currentNpcInteraction) {
-                    // Attempt to start the quiz
                     this.startQuiz(this.currentNpcInteraction.dataId);
                 } else if (this.showingKnowledgeUI) {
-                     // Close knowledge UI
                      this.hideAllNpcUI();
-                } else if (this.closestNpc) {
-                    // Initiate interaction with the closest NPC
+                } else if (this.closestNpc) { // Already implies no other UI is active due to the !this.showingChatUI check
                     this.handleNpcInteraction(this.closestNpc);
-                } else {
-                    // Optional: Log if E is pressed with no target, if needed for future debugging
-                    // console.log("'E' pressed but no interaction target.");
                 }
-            }
-
-            // --- UI Auto-Close Logic ---
-            if ((this.showingKnowledgeUI || this.showingQuizPromptUI) && this.currentNpcInteraction && this.currentNpcInteraction.sprite) {
-                 const distanceToCurrentNpc = Phaser.Math.Distance.Between(
-                     this.player.x, this.player.y,
-                     this.currentNpcInteraction.sprite.x, this.currentNpcInteraction.sprite.y
-                 );
-                 if (distanceToCurrentNpc > uiCloseRange) {
-                     this.hideAllNpcUI();
-                 }
-            }
-
-
-            // --- Player Movement ---
-            // Player movement is always allowed based on input keys.
-            // Quiz logic (checkAnswer) and UI logic handle states where movement might be implicitly stopped or consequences occur.
-
-            // Reset velocity
-            this.player.setVelocity(0);
-
-            // Player Movement (4-Directional Top-Down)
-            if (this.cursors.left.isDown || this.touchFlags.left) {
-                this.player.setVelocityX(-speed);
-            } else if (this.cursors.right.isDown || this.touchFlags.right) {
-                this.player.setVelocityX(speed);
-            }
-
-            if (this.cursors.up.isDown || this.touchFlags.up) {
-                this.player.setVelocityY(-speed);
-            } else if (this.cursors.down.isDown || this.touchFlags.down) {
-                this.player.setVelocityY(speed);
-            }
-
-            // Normalize and scale the velocity if moving
-            if (this.player.body.velocity.x !== 0 || this.player.body.velocity.y !== 0) {
-                 this.player.body.velocity.normalize().scale(speed);
             }
 
             // Reset single-frame touch flags
@@ -523,21 +520,68 @@
                 this.touchFlags.interactPressed = false;
             }
 
-            // --- Emit Player Movement ---
-            if (this.player && this.socket) { // Ensure player and socket exist
-              const x = this.player.x;
-              const y = this.player.y;
-              // const r = this.player.rotation; // If syncing rotation
+            // --- UI Auto-Close Logic ---
+            if ((this.showingKnowledgeUI || this.showingQuizPromptUI || this.showingChatUI) && this.currentNpcInteraction && this.currentNpcInteraction.sprite) {
+                 const distanceToCurrentNpc = Phaser.Math.Distance.Between(
+                     this.player.x, this.player.y,
+                     this.currentNpcInteraction.sprite.x, this.currentNpcInteraction.sprite.y
+                 );
+                 if (distanceToCurrentNpc > uiCloseRange) {
+                     if (this.showingKnowledgeUI || this.showingQuizPromptUI) {
+                        this.hideAllNpcUI();
+                     }
+                     if (this.showingChatUI) {
+                        this.hideChatUI();
+                     }
+                 }
+            }
 
-              if (this.player.oldPosition && (x !== this.player.oldPosition.x || y !== this.player.oldPosition.y /* || r !== this.player.oldPosition.rotation */)) {
-                this.socket.emit('playerMovement', { x: this.player.x, y: this.player.y /*, rotation: this.player.rotation */ });
-              }
-              // Store old position
-              this.player.oldPosition = {
-                x: this.player.x,
-                y: this.player.y,
-                // rotation: this.player.rotation
-              };
+            // --- Player Movement ---
+            if (!this.showingChatUI && !this.gamePausedForChat) {
+                if (this.player) {
+                    this.player.setVelocity(0); // Reset velocity at the start of movement logic
+
+                    let dx = 0;
+                    let dy = 0;
+
+                    if ((this.cursors && this.cursors.left.isDown) || this.touchFlags.left) {
+                        dx = -1;
+                    } else if ((this.cursors && this.cursors.right.isDown) || this.touchFlags.right) {
+                        dx = 1;
+                    }
+
+                    if ((this.cursors && this.cursors.up.isDown) || this.touchFlags.up) {
+                        dy = -1;
+                    } else if ((this.cursors && this.cursors.down.isDown) || this.touchFlags.down) {
+                        dy = 1;
+                    }
+
+                    this.player.setVelocityX(dx * speed);
+                    this.player.setVelocityY(dy * speed);
+
+                    // Normalize and scale the velocity if moving diagonally
+                    if (dx !== 0 && dy !== 0) {
+                        this.player.body.velocity.normalize().scale(speed);
+                    }
+
+                    // --- Emit Player Movement ---
+                    if (this.socket) {
+                        const x = this.player.x;
+                        const y = this.player.y;
+                        if (!this.player.oldPosition || x !== this.player.oldPosition.x || y !== this.player.oldPosition.y) {
+                            this.socket.emit('playerMovement', { x: x, y: y });
+                            this.player.oldPosition = { x: x, y: y };
+                        }
+                    } else if (this.player.oldPosition === undefined) { // Initialize if not set
+                         this.player.oldPosition = { x: this.player.x, y: this.player.y };
+                    }
+                }
+            } else if (this.player) { // If chat is active or game paused, ensure velocity is zero
+                this.player.setVelocity(0);
+                if (this.player.oldPosition) { // Keep oldPosition in sync to prevent jumps
+                    this.player.oldPosition.x = this.player.x;
+                    this.player.oldPosition.y = this.player.y;
+                }
             }
         }
 
@@ -633,7 +677,7 @@
                      this.timerEvent.remove(false); // Stop the timer event
                      this.timerEvent = null; // Clear the reference
                 }
-                this.checkAnswer(); // Check answer when time runs out
+                this.checkAnswer(true); // Pass true for timedOut
             }
         }
 
@@ -647,7 +691,7 @@
             
             // Stop further interactions for this question immediately
             const wasActive = this.quizIsActive; // Store if it was active before this check
-            this.quizIsActive = false;
+            this.quizIsActive = false; // Set to false to prevent re-entry or multiple checks
 
             if (this.timerEvent) {
                 this.timerEvent.remove(false);
@@ -655,17 +699,14 @@
             }
 
             let playerOnCorrectPlatform = false;
-            // let chosenAnswerText = null; // Not strictly needed if only using playerOnCorrectPlatform
             const correctAnswer = this.currentQuestionData.correct;
 
             this.answerZones.forEach((zone, index) => {
                 if (this.player && Phaser.Geom.Rectangle.Contains(zone, this.player.x, this.player.y)) {
-                    // chosenAnswerText = this.currentQuestionData.a[index];
                     if (index === this.currentCorrectAnswerIndex) {
                         playerOnCorrectPlatform = true;
                     }
-                    // Highlight the platform player is on, regardless of correctness for now
-                    this.answerTexts[index].setFill('#ffff00');
+                    this.answerTexts[index].setFill('#ffff00'); // Highlight chosen platform
                 }
             });
 
@@ -673,22 +714,18 @@
                 this.feedbackText.setText(`Time's up! Correct: ${correctAnswer}`).setFill('#ff9900').setVisible(true);
             } else if (playerOnCorrectPlatform) {
                 this.feedbackText.setText('Correct!').setFill('#00ff00').setVisible(true);
-                if (wasActive) { // Only add score if quiz was active when answer was made
+                if (wasActive) {
                     this.playerScore += (this.currentQuizData.reward || 1);
                 }
-            } else { // Incorrect choice or didn't land on any platform if not timed out
+            } else {
                 this.feedbackText.setText(`Wrong! Correct: ${correctAnswer}`).setFill('#ff0000').setVisible(true);
-                
-                // Highlight the correct answer in green, and the chosen wrong answer (if any) in a different color.
                 this.answerTexts.forEach((textObj, idx) => {
                     if (idx === this.currentCorrectAnswerIndex) {
-                        textObj.setFill('#00cc00'); // Correct answer green
+                        textObj.setFill('#00cc00'); 
                     } else if (textObj.style.fill && typeof textObj.style.fill === 'string' && textObj.style.fill.toLowerCase() === '#ffff00') {
-                        // This was the one player selected (marked yellow previously) and it's wrong
-                        textObj.setFill('#ff6347'); // Tomato red for selected wrong answer
+                        textObj.setFill('#ff6347'); 
                     } else {
-                        // Other incorrect, unselected options
-                        textObj.setFill('#d3d3d3'); // Light gray for other non-correct, non-selected
+                        textObj.setFill('#d3d3d3'); 
                     }
                 });
             }
@@ -696,14 +733,14 @@
 
             this.time.delayedCall(2500, () => {
                 this.feedbackText.setVisible(false);
-                this.answerTexts.forEach(textObj => textObj.setFill('#fff')); // Reset all answer text colors
+                this.answerTexts.forEach(textObj => textObj.setFill('#fff'));
 
                 this.currentQuizQuestionIndex++;
                 if (this.currentQuizData && this.currentQuizQuestionIndex < this.currentQuizData.questions.length) {
                     this.quizIsActive = true; // Re-activate for the next question
                     this.loadQuestion(this.currentQuizQuestionIndex);
                 } else {
-                    this.endQuiz();
+                    this.endQuiz(); // Normal completion or end of questions
                 }
             });
         }
@@ -718,7 +755,7 @@
             }
             
             const finalScoreDisplay = this.currentQuizData ?
-                `Final Score: ${this.playerScore} Sats` :
+                `Quiz Over! Final Score: ${this.playerScore} Sats` : // More descriptive
                 `Final Sats: ${this.playerScore}`;
 
             this.feedbackText.setText(reasonMessage || finalScoreDisplay).setFill('#00ffff').setVisible(true);
@@ -738,15 +775,13 @@
 
             this.time.delayedCall(3500, () => { // Longer display for final message
                 this.feedbackText.setVisible(false);
-                this.currentNpcInteraction = null;
+                this.currentNpcInteraction = null; // Clear NPC interaction after quiz UI is fully done
             });
         }
         
         // --- NPC Interaction Handling ---
         handleNpcInteraction(npc) {
-            if (this.quizIsActive || this.showingKnowledgeUI || this.showingQuizPromptUI) {
-                // If any UI is already active, or quiz is running, don't start a new interaction.
-                // This prevents overlapping UI if player mashes E or moves quickly between NPCs.
+            if (this.quizIsActive || this.showingKnowledgeUI || this.showingQuizPromptUI || this.showingChatUI) {
                 return;
             }
 
@@ -756,13 +791,15 @@
             if (npc.type === 'knowledge') {
                 this.showKnowledgeUI(npc.dataId);
             } else if (npc.type === 'quiz') {
-                // For AI quiz, we directly call startQuiz if that's the dataId
-                // Otherwise, show the prompt for regular quizzes.
                 if (npc.dataId === 'AI_BITCOIN_QUIZ') {
-                    this.startQuiz(npc.dataId); // Directly start the AI quiz
+                    this.startQuiz(npc.dataId); 
                 } else {
-                    this.showQuizPromptUI(npc.dataId); // Show prompt for other quizzes
+                    this.showQuizPromptUI(npc.dataId); 
                 }
+            } else if (npc.type === 'demon_chat') {
+                console.log('Interacting with demon NPC:', npc.id);
+                this.currentNpcInteraction = npc; 
+                this.showChatUI(npc); 
             }
         }
 
@@ -773,20 +810,17 @@
                 return;
             }
 
-            // Update UI elements (assuming container children order: bg, title, content, close)
-            this.knowledgeContainer.getAt(1).setText(lesson.title); // Update title
-            this.knowledgeContainer.getAt(2).setText(lesson.content); // Update content
+            this.knowledgeContainer.getAt(1).setText(lesson.title); 
+            this.knowledgeContainer.getAt(2).setText(lesson.content); 
 
             this.knowledgeContainer.setVisible(true);
             this.showingKnowledgeUI = true;
 
-            // Award score/sats if lesson not completed before
             if (!this.completedLessons.has(lessonId)) {
                 const reward = lesson.reward || 0;
                 this.playerScore += reward;
                 this.scoreText.setText('Sats: ' + this.playerScore);
                 this.completedLessons.add(lessonId);
-                // Optional: Add a temporary text effect for reward
                  const rewardText = this.add.text(this.player.x, this.player.y - 50, `+${reward} Sats!`, { fontSize: '16px', fill: '#00ff00' }).setOrigin(0.5);
                  this.tweens.add({
                      targets: rewardText,
@@ -796,21 +830,18 @@
                      ease: 'Power1',
                      onComplete: () => { rewardText.destroy(); }
                  });
-            } else {
-                 // Optional: console.log(`Lesson '${lessonId}' already completed.`);
             }
         }
 
         showQuizPromptUI(quizId) {
             const quiz = this.quizzes.find(q => q.id === quizId);
             if (!quiz) {
-                console.error("Quiz not found for prompt:", quizId); // Keep error logs
+                console.error("Quiz not found for prompt:", quizId); 
                 return;
             }
 
-            // Update UI elements (assuming container children order: bg, title, topic, cost, start, close)
-            this.quizPromptContainer.getAt(2).setText(`Topic: ${quiz.topic}`); // Update topic
-            this.quizPromptContainer.getAt(3).setText(`Cost: ${quiz.cost} Sats`); // Update cost
+            this.quizPromptContainer.getAt(2).setText(`Topic: ${quiz.topic}`); 
+            this.quizPromptContainer.getAt(3).setText(`Cost: ${quiz.cost} Sats`); 
 
             this.quizPromptContainer.setVisible(true);
             this.showingQuizPromptUI = true;
@@ -821,15 +852,174 @@
             this.quizPromptContainer.setVisible(false);
             this.showingKnowledgeUI = false;
             this.showingQuizPromptUI = false;
-            this.currentNpcInteraction = null;
+            // this.currentNpcInteraction = null; // Moved to endQuiz or hideChatUI to ensure it's cleared at the right time
+        }
+
+        showChatUI(npc) {
+            if (!this.chatUIDiv || !this.chatInputElement || !document.getElementById('chat-ui')) {
+                console.error("Chat UI elements not found in showChatUI. Ensure www/index.html contains the chat UI div.");
+                return;
+            }
+
+            this.currentNpcChatTarget = npc; // Keep track of who we are talking to
+            this.showingChatUI = true;
+            this.gamePausedForChat = true; // Explicitly pause game logic controlled by this flag
+
+            this.chatUIDiv.style.display = 'block';
+            this.chatInputElement.value = ''; // Clear previous input
+            this.clearChatHistory(); 
+            this.addMessageToChatHistory('System', 'You are now chatting with the demon. Ask your question.');
+            this.chatInputElement.focus();
+
+            if (this.input && this.input.keyboard) {
+                this.input.keyboard.disableGlobalCapture();
+                console.log('Phaser global keyboard capture DISABLED for chat.');
+            } else {
+                console.warn('Phaser input system or keyboard not available in showChatUI for disabling global capture.');
+            }
+        }
+
+        hideChatUI() {
+            if (!this.chatUIDiv || !document.getElementById('chat-ui')) {
+                console.error("Chat UI elements not found in hideChatUI.");
+                return;
+            }
+
+            this.showingChatUI = false;
+            this.gamePausedForChat = false; // Unpause game logic
+            this.chatUIDiv.style.display = 'none';
+            this.currentNpcChatTarget = null;
+            this.currentNpcInteraction = null; // Clear general NPC interaction too
+
+            if (this.input && this.input.keyboard) {
+                this.input.keyboard.enableGlobalCapture();
+                console.log('Phaser global keyboard capture ENABLED after chat.');
+            } else {
+                console.warn('Phaser input system or keyboard not available in hideChatUI for enabling global capture.');
+            }
+            if (this.chatInputElement) this.chatInputElement.blur(); // Remove focus
+        }
+
+        async handleChatSend() { // Made async to handle fetch
+            if (!this.chatInputElement || !this.chatHistoryDiv) {
+                 console.error("Chat input or history element not found in handleChatSend");
+                 return;
+            }
+
+            const playerQuestion = this.chatInputElement.value.trim();
+            if (playerQuestion) {
+                this.addMessageToChatHistory('Player', playerQuestion);
+                this.chatInputElement.value = '';
+                this.chatInputElement.focus();
+
+                // Placeholder for "Demon is thinking..."
+                this.addMessageToChatHistory('Demon', 'The demon ponders your query...');
+
+                try {
+                    const response = await fetch('/api/ask-demon', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            question: playerQuestion,
+                            playerId: this.currentPlayerId, // Send player ID
+                            frontendBalance: this.playerScore // Send current frontend score
+                        }),
+                    });
+
+                    const data = await response.json();
+
+                    if (!response.ok) {
+                        // Handle errors from the backend (e.g., insufficient sats, server errors)
+                        let errorMessage = data.error || `The demon is unresponsive (HTTP ${response.status})`;
+                        if (data.currentBalance !== undefined) {
+                            errorMessage += ` Your balance: ${data.currentBalance} sats.`;
+                        }
+                        this.addMessageToChatHistory('Demon', errorMessage);
+                        console.error('Error from demon API:', data);
+                        // If the error response includes a balance (e.g. insufficient funds error), update UI
+                        if (data.currentBalance !== undefined) {
+                             this.playerScore = data.currentBalance;
+                             if (this.scoreText) {
+                                 this.scoreText.setText('Sats: ' + this.playerScore);
+                             }
+                             console.log(`[Chat] Player ${this.currentPlayerId} balance after failed query (currentBalance from error): ${this.playerScore} sats. UI updated.`);
+                        } else if (data.newBalance !== undefined) { // Fallback if newBalance is sent on error
+                            this.playerScore = data.newBalance;
+                            if (this.scoreText) {
+                                this.scoreText.setText('Sats: ' + this.playerScore);
+                            }
+                            console.log(`[Chat] Player ${this.currentPlayerId} balance after failed query (newBalance from error): ${this.playerScore} sats. UI updated.`);
+                        }
+                        return;
+                    }
+
+                    // Success
+                    if (data.answer) {
+                        this.addMessageToChatHistory('Demon', data.answer);
+                    } else {
+                        this.addMessageToChatHistory('Demon', "The demon's response was... unclear.");
+                    }
+                    if (data.newBalance !== undefined) {
+                        this.playerScore = data.newBalance; // Update player's score
+                        if (this.scoreText) {
+                            this.scoreText.setText('Sats: ' + this.playerScore); // Update UI display
+                        }
+                        console.log(`[Chat] Player ${this.currentPlayerId} new balance: ${this.playerScore} sats. UI updated.`);
+                    }
+
+                } catch (error) {
+                    console.error('Failed to send chat message or parse response:', error);
+                    this.addMessageToChatHistory('Demon', 'A mysterious force prevents the demon from responding. Check the console.');
+                }
+            }
+        }
+
+        addMessageToChatHistory(sender, message) {
+            if (!this.chatHistoryDiv) {
+                console.error("Chat history element not found in addMessageToChatHistory");
+                return;
+            }
+
+            const messageElement = document.createElement('p');
+            messageElement.style.margin = '5px 0';
+            messageElement.style.padding = '3px 6px';
+            messageElement.style.wordWrap = 'break-word'; 
+            messageElement.style.lineHeight = '1.4';
+            messageElement.style.fontSize = '14px';
+
+            const senderStrong = document.createElement('strong');
+            senderStrong.textContent = sender + ': ';
+
+            if (sender === 'Player') {
+                senderStrong.style.color = '#87CEFA'; 
+                messageElement.style.textAlign = 'right';
+            } else if (sender === 'Demon') {
+                senderStrong.style.color = '#FF7F7F'; 
+            } else { 
+                senderStrong.style.color = '#B0C4DE'; 
+                messageElement.style.fontStyle = 'italic';
+            }
+            messageElement.appendChild(senderStrong);
+            messageElement.appendChild(document.createTextNode(message));
+
+            this.chatHistoryDiv.appendChild(messageElement);
+            this.chatHistoryDiv.scrollTop = this.chatHistoryDiv.scrollHeight; 
+        }
+
+        clearChatHistory() {
+            if (this.chatHistoryDiv) {
+                this.chatHistoryDiv.innerHTML = '';
+            }
         }
 
         async startQuiz(quizId) {
-            this.hideAllNpcUI(); // Hide any open NPC UI first
+            this.hideAllNpcUI(); 
 
             if (quizId === 'AI_BITCOIN_QUIZ') {
                 try {
-                    this.questionText.setText('Fetching Bitcoin Quiz...').setVisible(true); // Show loading message
+                    this.questionText.setText('Fetching Bitcoin Quiz...').setVisible(true); 
                     const apiUrl = '/api/quiz?topic=Bitcoin&count=5';
                     const response = await fetch(apiUrl);
                     if (!response.ok) {
@@ -842,33 +1032,27 @@
                         this.feedbackText.setText('AI Bitcoin quiz not available. Try later.').setVisible(true);
                         this.time.delayedCall(2500, () => {
                             this.feedbackText.setVisible(false);
-                            this.questionText.setText('').setVisible(false); // Clear loading message
+                            this.questionText.setText('').setVisible(false); 
                         });
                         this.currentNpcInteraction = null;
                         return;
                     }
 
-                    const aiQuizCost = 0; // AI quizzes are free
-                    // No need to check player score if cost is 0, but good practice if cost might change
-                    // this.playerScore -= aiQuizCost; // No deduction if free
-                    // this.scoreText.setText('Sats: ' + this.playerScore);
+                    const aiQuizCost = 0; 
 
                     this.currentQuizData = {
                         id: fetchedQuizData.id || 'AI_BITCOIN_QUIZ',
                         topic: fetchedQuizData.topic || 'Bitcoin (AI)',
                         questions: fetchedQuizData.questions,
                         cost: aiQuizCost,
-                        reward: 1 // Example reward for AI quiz completion
+                        reward: 1 
                     };
                     this.quizIsActive = true;
                     this.currentQuizQuestionIndex = 0;
                     
-                    // Prepare UI for quiz
-                    // Player, NPCs, and other players remain visible during the quiz
-                    this.questionText.setVisible(true); // Already visible from loading message
+                    this.questionText.setVisible(true); 
                     this.answerTexts.forEach(text => text.setVisible(true));
                     this.timerText.setVisible(true);
-                    // Score text remains visible
 
                     console.log("[Phaser] In startQuiz (AI), about to call loadQuestion. currentQuizQuestionIndex:", this.currentQuizQuestionIndex);
                     console.log("[Phaser] In startQuiz (AI), this.currentQuizData:", JSON.parse(JSON.stringify(this.currentQuizData || {})));
@@ -876,17 +1060,16 @@
 
                 } catch (error) {
                     console.error('Error starting AI quiz:', error);
-                    this.questionText.setText('').setVisible(false); // Clear loading message
+                    this.questionText.setText('').setVisible(false); 
                     this.feedbackText.setText(`Error: ${error.message || 'Could not load AI quiz.'}`).setVisible(true);
                     this.time.delayedCall(3000, () => this.feedbackText.setVisible(false));
                     this.currentNpcInteraction = null;
                 }
             } else {
-                // Existing logic for predefined quizzes from this.quizzes
                 const selectedQuiz = this.quizzes.find(q => q.id === quizId);
                 if (!selectedQuiz) {
                     console.error("Quiz data not found for starting:", quizId);
-                    this.showQuizPromptUI(quizId); // Re-show prompt if quiz is not found
+                    this.showQuizPromptUI(quizId); 
                     return;
                 }
 
@@ -895,16 +1078,13 @@
                     this.playerScore -= cost;
                     this.scoreText.setText('Sats: ' + this.playerScore);
 
-                    this.currentQuizData = selectedQuiz; // Set currentQuizData for loadQuestion
+                    this.currentQuizData = selectedQuiz; 
                     this.quizIsActive = true;
                     this.currentQuizQuestionIndex = 0;
 
-                    // Prepare UI for quiz
-                    // Player, NPCs, and other players remain visible during the quiz
                     this.questionText.setVisible(true);
                     this.answerTexts.forEach(text => text.setVisible(true));
                     this.timerText.setVisible(true);
-                    // Score text remains visible
 
                     console.log("[Phaser] In startQuiz (predefined), about to call loadQuestion. currentQuizQuestionIndex:", this.currentQuizQuestionIndex);
                     console.log("[Phaser] In startQuiz (predefined), this.currentQuizData:", JSON.parse(JSON.stringify(this.currentQuizData || {})));
@@ -914,7 +1094,7 @@
                     this.feedbackText.setText(`Not enough Sats! Need ${cost}.`).setVisible(true);
                     this.time.delayedCall(2000, () => {
                         this.feedbackText.setVisible(false);
-                        this.showQuizPromptUI(quizId); // Re-show prompt if they can't afford
+                        this.showQuizPromptUI(quizId); 
                     });
                 }
             }
@@ -926,14 +1106,14 @@
         type: Phaser.WEBGL,
         width: 800,
         height: 600,
-        parent: 'game',
+        parent: 'game', // Matches the div id in index.html where the game canvas will be injected
         render: {
             pixelArt: true
         },
         physics: {
             default: 'arcade',
             arcade: {
-                gravity: { y: 0 },
+                gravity: { y: 0 }, // Top-down game, no global gravity
                 debug: false // Set true to see physics bodies and zones
             }
         },
