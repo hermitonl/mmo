@@ -29,8 +29,8 @@
             this.lessons = [
                 {
                     id: 'lesson0',
-                    title: 'What are Sats?',
-                    content: 'Sats, short for Satoshis, are the smallest unit of Bitcoin. 1 Bitcoin = 100,000,000 Sats.',
+                    title: 'What is hermitONL?',
+                    content: 'A place to learn, earn, and play with Bitcoin and Lightning.',
                     reward: 5 // Example reward
                 }
                 // Add more lessons here
@@ -39,7 +39,7 @@
             // --- NPC Data ---
              this.npcs = [
                 { id: 'npc1', type: 'knowledge', dataId: 'lesson0', x: 150, y: 200, spriteKey: 'npc_info', sprite: null }, // Adjusted for 800x600 background, corrected spriteKey
-                { id: 'npc2', type: 'quiz', dataId: 'AI_BITCOIN_QUIZ', x: 650, y: 200, spriteKey: 'npc_quiz', sprite: null }, // Adjusted for 800x600 background
+                { id: 'npc2', type: 'quiz', dataId: 'quiz4', x: 650, y: 200, spriteKey: 'npc_quiz', sprite: null }, // Adjusted for 800x600 background
                 { id: 'npc_demon', type: 'demon_chat', x: 300, y: 500, spriteKey: 'demon_npc', sprite: null }
             ];
 
@@ -76,6 +76,96 @@
                             a: ['Proof of Stake', 'Proof of Authority', 'Proof of Work', 'Proof of Burn'],
                             correct: 'Proof of Work',
                             duration: 10
+                        },
+                        {
+                            q: 'Which of these is NOT a function of money?',
+                            a: ['Store of Value', 'Medium of Exchange', 'Unit of Weight', 'Unit of Account'],
+                            correct: 'Unit of Weight'
+                        },
+                        {
+                            q: 'Which of these is an essential property of good money?',
+                            a: ['Scarcity', 'Tastiness', 'Shininess', 'Popularity'],
+                            correct: 'Scarcity'
+                        },
+                        {
+                            q: 'Who controls Bitcoin?',
+                            a: ['Governments', 'Banks', 'Miners', 'No one, it’s decentralized'],
+                            correct: 'No one, it’s decentralized'
+                        },
+                        {
+                            q: 'Why is Bitcoin scarce?',
+                            a: [
+                                'Because banks issue it carefully',
+                                'Because governments limit how much is made',
+                                'Because it has a fixed supply of 21 million',
+                                'Because people lose their Bitcoin'
+                            ],
+                            correct: 'Because it has a fixed supply of 21 million'
+                        },
+                        {
+                            q: 'Which money is easiest to transport globally?',
+                            a: ['Gold', 'Fiat', 'Bitcoin', 'Stock'],
+                            correct: 'Bitcoin'
+                        },
+                        {
+                            q: 'Why is Lightning better for small payments?',
+                            a: ['It’s slower but more secure', 'It makes transactions instant and cheap', 'It helps governments control Bitcoin', 'Because Elon said so'],
+                            correct: 'It makes transactions instant and cheap'
+                        },
+                        {
+                            q: 'What is the role of **Routing Nodes**?',
+                            a: ['To forward payments across the network', 'To store Bitcoin for users', 'To process traditional banking transactions', 'To buy Bitcoin at exchange'],
+                            correct: 'To forward payments across the network'
+                        },
+                        {
+                            q: 'Which of these is a way LSPs make money?',
+                            a: ['Routing fees', 'Charging per Bitcoin mined', 'Selling hardware wallets', 'Scam'],
+                            correct: 'Routing fees'
+                        },
+                        {
+                            q: 'What is the key to earning sats as an LSP?',
+                            a: ['Providing liquidity & routing payments', 'Mining Bitcoin', 'Selling NFTs', 'Stealing'],
+                            correct: 'Providing liquidity & routing payments'
+                        },
+                        {
+                            q: 'Which tool helps with Lightning liquidity automation?',
+                            a: ['Balance of Satoshis (BoS)', 'Microsoft Excel', 'Blockchain Explorer', 'No automation'],
+                            correct: 'Balance of Satoshis (BoS)'
+                        },
+                        {
+                            q: 'Why is uptime important for an LSP?',
+                            a: ['It ensures more routing opportunities', 'It makes mining easier', 'It increases Bitcoin price', 'Scam more people'],
+                            correct: 'It ensures more routing opportunities'
+                        },
+                        {
+                            q: "What does 'DeFi' stand for?",
+                            a: ["Decentralized Finance", "Digital Finance", "Default Finance", "Defined Finance"],
+                            correct: "Decentralized Finance"
+                        },
+                        {
+                            q: "What is a 'private key' in crypto?",
+                            a: ["A public address", "A password for an exchange", "A secret code to access funds", "A type of cryptocurrency"],
+                            correct: "A secret code to access funds"
+                        },
+                        {
+                            q: "What is 'blockchain'?",
+                            a: ["A type of coin", "A distributed ledger", "A crypto exchange", "A wallet software"],
+                            correct: "A distributed ledger"
+                        },
+                        {
+                            q: "What is the Lightning Network primarily for?",
+                            a: ["Storing Bitcoin", "Fast, cheap Bitcoin txs", "Mining Bitcoin", "Issuing new tokens"],
+                            correct: "Fast, cheap Bitcoin txs"
+                        },
+                        {
+                            q: "Lightning Network operates as a ___ layer.",
+                            a: ["Base", "Second", "Third", "Sidechain"],
+                            correct: "Second"
+                        },
+                        {
+                            q: "What are payment channels in Lightning?",
+                            a: ["Email addresses", "Two-party ledgers", "Public blockchains", "Centralized servers"],
+                            correct: "Two-party ledgers"
                         }
                     ]
                 }
@@ -358,7 +448,7 @@
 
             // --- Feedback Text ---
             this.feedbackText = this.add.text(this.cameras.main.width / 2, this.cameras.main.height / 2, '', {
-                fontSize: '48px',
+                fontSize: '20px',
                 fill: '#fff',
                 align: 'center',
                 stroke: '#000',
@@ -615,17 +705,26 @@
             }
 
             this.questionText.setText(this.currentQuestionData.q);
-            this.currentCorrectAnswerIndex = this.currentQuestionData.a.indexOf(this.currentQuestionData.correct);
+            // --- Shuffle Answer Choices ---
+            const originalCorrectAnswerValue = this.currentQuestionData.correct;
+            let shuffledAnswerOptions = [...this.currentQuestionData.a]; // Create a mutable copy
+            Phaser.Utils.Array.Shuffle(shuffledAnswerOptions); // Shuffle the copy
+
+            // Update the question data with the shuffled answers for this session
+            this.currentQuestionData.a = shuffledAnswerOptions;
+            // --- End of Shuffle ---
+
+            this.currentCorrectAnswerIndex = this.currentQuestionData.a.indexOf(originalCorrectAnswerValue);
 
             if (this.currentCorrectAnswerIndex === -1) {
-                 console.error(`[Phaser] Correct answer "${this.currentQuestionData.correct}" not found in options:`, this.currentQuestionData.a);
-                 this.endQuiz('Error: Invalid question data (correct answer missing).');
+                 console.error(`[Phaser] Correct answer "${originalCorrectAnswerValue}" not found in SHUFFLED options:`, this.currentQuestionData.a);
+                 this.endQuiz('Error: Invalid question data (correct answer missing after shuffle).');
                  return;
             }
 
             this.answerTexts.forEach((textObj, i) => {
                 if (this.currentQuestionData.a[i] !== undefined) {
-                    textObj.setText(this.currentQuestionData.a[i]);
+                    textObj.setText(this.currentQuestionData.a[i]); // Use the shuffled answers
                     textObj.setVisible(true);
                     textObj.setFill('#fff');
                 } else {
@@ -699,33 +798,50 @@
             }
 
             let playerOnCorrectPlatform = false;
+            let playerPlatformIndex = -1; // Initialize to -1 (no platform)
             const correctAnswer = this.currentQuestionData.correct;
 
+            // Determine player's current platform and if it's correct
             this.answerZones.forEach((zone, index) => {
                 if (this.player && Phaser.Geom.Rectangle.Contains(zone, this.player.x, this.player.y)) {
+                    playerPlatformIndex = index; // Keep track of the platform player is on
                     if (index === this.currentCorrectAnswerIndex) {
                         playerOnCorrectPlatform = true;
                     }
-                    this.answerTexts[index].setFill('#ffff00'); // Highlight chosen platform
                 }
             });
 
-            if (timedOut) {
-                this.feedbackText.setText(`Time's up! Correct: ${correctAnswer}`).setFill('#ff9900').setVisible(true);
-            } else if (playerOnCorrectPlatform) {
+            // Award points if correct and quiz was active
+            if (playerOnCorrectPlatform && wasActive) {
+                this.playerScore += 1;
+            }
+
+            // Set feedback text and platform highlighting
+            if (playerOnCorrectPlatform) {
                 this.feedbackText.setText('Correct!').setFill('#00ff00').setVisible(true);
-                if (wasActive) {
-                    this.playerScore += (this.currentQuizData.reward || 1);
+                if (timedOut) { // Modify message slightly if time ran out but they were correct
+                    this.feedbackText.setText(`Correct!`).setFill('#00dd00');
                 }
-            } else {
-                this.feedbackText.setText(`Wrong! Correct: ${correctAnswer}`).setFill('#ff0000').setVisible(true);
+                // Highlight correct platform (player is on it) green, others dim
+                this.answerTexts.forEach((textObj, idx) => {
+                    textObj.setFill(idx === playerPlatformIndex ? '#00cc00' : '#d3d3d3');
+                });
+            } else { // Player is on a wrong platform, or no platform
+                if (timedOut) {
+                    this.feedbackText.setText(`Time's up! Correct: ${correctAnswer}`).setFill('#ff9900').setVisible(true);
+                } else {
+                    // This case (not timedOut and wrong) isn't currently reachable by game flow
+                    // as checkAnswer is only called with timedOut=true.
+                    this.feedbackText.setText(`Wrong! Correct: ${correctAnswer}`).setFill('#ff0000').setVisible(true);
+                }
+                // Highlight actual correct green, player's wrong choice (if any) red-ish, and dim others
                 this.answerTexts.forEach((textObj, idx) => {
                     if (idx === this.currentCorrectAnswerIndex) {
-                        textObj.setFill('#00cc00'); 
-                    } else if (textObj.style.fill && typeof textObj.style.fill === 'string' && textObj.style.fill.toLowerCase() === '#ffff00') {
-                        textObj.setFill('#ff6347'); 
+                        textObj.setFill('#00cc00'); // Actual correct is green
+                    } else if (idx === playerPlatformIndex) { // If player was on a platform and it was wrong
+                        textObj.setFill('#ff6347'); // Player's wrong choice is red-ish
                     } else {
-                        textObj.setFill('#d3d3d3'); 
+                        textObj.setFill('#d3d3d3'); // Dim others
                     }
                 });
             }
@@ -1038,26 +1154,40 @@
                         return;
                     }
 
-                    const aiQuizCost = 0; 
+                    const aiQuizCost = 1; // Set AI quiz cost to 1
 
-                    this.currentQuizData = {
-                        id: fetchedQuizData.id || 'AI_BITCOIN_QUIZ',
-                        topic: fetchedQuizData.topic || 'Bitcoin (AI)',
-                        questions: fetchedQuizData.questions,
-                        cost: aiQuizCost,
-                        reward: 1 
-                    };
-                    this.quizIsActive = true;
-                    this.currentQuizQuestionIndex = 0;
-                    
-                    this.questionText.setVisible(true); 
-                    this.answerTexts.forEach(text => text.setVisible(true));
-                    this.timerText.setVisible(true);
+                    if (this.playerScore >= aiQuizCost) {
+                        this.playerScore -= aiQuizCost;
+                        if (this.scoreText) {
+                            this.scoreText.setText('Sats: ' + this.playerScore);
+                        }
 
-                    console.log("[Phaser] In startQuiz (AI), about to call loadQuestion. currentQuizQuestionIndex:", this.currentQuizQuestionIndex);
-                    console.log("[Phaser] In startQuiz (AI), this.currentQuizData:", JSON.parse(JSON.stringify(this.currentQuizData || {})));
-                    this.loadQuestion(this.currentQuizQuestionIndex);
+                        this.currentQuizData = {
+                            id: fetchedQuizData.id || 'AI_BITCOIN_QUIZ',
+                            topic: fetchedQuizData.topic || 'Bitcoin (AI)',
+                            questions: fetchedQuizData.questions,
+                            cost: aiQuizCost,
+                            reward: 1
+                        };
+                        this.quizIsActive = true;
+                        this.currentQuizQuestionIndex = 0;
 
+                        this.questionText.setVisible(true);
+                        this.answerTexts.forEach(text => text.setVisible(true));
+                        this.timerText.setVisible(true);
+
+                        console.log("[Phaser] In startQuiz (AI), about to call loadQuestion. currentQuizQuestionIndex:", this.currentQuizQuestionIndex);
+                        console.log("[Phaser] In startQuiz (AI), this.currentQuizData:", JSON.parse(JSON.stringify(this.currentQuizData || {})));
+                        this.loadQuestion(this.currentQuizQuestionIndex);
+                    } else {
+                        this.questionText.setText('').setVisible(false); // Clear "Fetching..." message
+                        this.feedbackText.setText(`Not enough Sats! Need ${aiQuizCost}.`).setVisible(true);
+                        this.time.delayedCall(2000, () => {
+                            this.feedbackText.setVisible(false);
+                            // No specific UI to return to for AI quiz, just clear interaction
+                            this.currentNpcInteraction = null;
+                        });
+                    }
                 } catch (error) {
                     console.error('Error starting AI quiz:', error);
                     this.questionText.setText('').setVisible(false); 
@@ -1078,7 +1208,20 @@
                     this.playerScore -= cost;
                     this.scoreText.setText('Sats: ' + this.playerScore);
 
-                    this.currentQuizData = selectedQuiz; 
+                    // --- Select and randomize questions ---
+                    let allQuestions = [...selectedQuiz.questions]; // Create a copy to shuffle
+                    Phaser.Utils.Array.Shuffle(allQuestions); // Shuffle all questions
+
+                    const MAX_QUESTIONS_PER_SESSION = 5;
+                    let sessionQuestions = allQuestions.slice(0, MAX_QUESTIONS_PER_SESSION);
+
+                    // Create a new quiz data object for the current session
+                    this.currentQuizData = {
+                        ...selectedQuiz, // Copy other properties like id, topic, cost, reward
+                        questions: sessionQuestions // Use the selected and shuffled questions
+                    };
+                    // --- End of question selection ---
+
                     this.quizIsActive = true;
                     this.currentQuizQuestionIndex = 0;
 
