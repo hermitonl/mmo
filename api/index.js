@@ -44,6 +44,7 @@ const DEFAULT_QUIZZES_LIST = [
 ];
 
 const app = express();
+app.use(express.json()); // Middleware to parse JSON bodies
 
 // Helper function to shuffle an array (Fisher-Yates shuffle)
 function shuffleArray(array) {
@@ -76,7 +77,8 @@ const allowedOrigins = [
   "https://mmo.hermit.onl", // Custom domain of your deployed client (Render)
   "https://play.hermit.onl", // Custom domain of your deployed client (Vercel)
   "http://localhost:8080", // For local development
-  "http://192.168.0.192:8080/" // For local development
+  "http://192.168.0.192:8080", // For local development
+  "http://192.168.0.191:8080" // For local development (removed trailing slash)
 ];
 
 if (process.env.CLIENT_ORIGIN) {
@@ -134,7 +136,8 @@ const io = new Server(server, {
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro-preview-03-25" }); // Or your preferred model
 
-const players = {}; // Simple in-memory store for player data
+const players = {}; // Simple in-memory store for player data (positions, socket IDs)
+let playerBalances = {}; // Initialize as empty, players get 0 sats on first contact via endpoint logic
 
 io.on('connection', (socket) => {
   console.log('A user connected:', socket.id);
@@ -489,6 +492,173 @@ Ensure the entire output is a single, valid JSON array. Do not include any text 
   } catch (error) {
     console.error("Error generating quiz with Gemini:", error);
     res.status(500).json({ error: "Failed to generate quiz due to an internal server error.", details: error.message });
+  }
+});
+// Endpoint for the demon to answer questions using Gemini
+app.post('/api/ask-demon', async (req, res) => {
+  const { question, playerId, frontendBalance } = req.body;
+
+  if (!question) {
+    return res.status(400).json({ error: "Missing 'question' in request body." });
+  }
+  if (!playerId) {
+    return res.status(400).json({ error: "Missing 'playerId' in request body. The demon requires your identity!" });
+  }
+
+  // Initialize balance if player is new
+  // Synchronize balance: Use frontendBalance if player is new or if frontend has a higher (more up-to-date) balance.
+  const currentBackendBalance = playerBalances[playerId];
+  let effectiveBalance = 0; // Default to 0 if no other info
+
+  if (currentBackendBalance !== undefined) {
+    effectiveBalance = currentBackendBalance; // Player known, start with their backend balance
+  }
+
+  if (typeof frontendBalance === 'number' && frontendBalance >= 0) {
+    if (currentBackendBalance === undefined) {
+      // Player is new to backend, trust frontend's balance as starting point
+      effectiveBalance = frontendBalance;
+      console.log(`[API Server /api/ask-demon] New player ${playerId} identified by backend. Using frontendBalance: ${frontendBalance} as initial sats.`);
+    } else if (frontendBalance > currentBackendBalance) {
+      // Frontend has more sats (e.g., earned offline or from other interactions not yet synced)
+      // For this simple model, we'll trust the frontend if it's higher.
+      effectiveBalance = frontendBalance;
+      console.log(`[API Server /api/ask-demon] Player ${playerId} frontendBalance (${frontendBalance}) is higher than backend (${currentBackendBalance}). Updating backend.`);
+    } else if (frontendBalance < currentBackendBalance) {
+        // Backend has more - this could happen if another transaction occurred on backend.
+        // For now, we'll still use backend's higher value. Frontend will sync on response.
+        console.log(`[API Server /api/ask-demon] Player ${playerId} backendBalance (${currentBackendBalance}) is higher than frontend (${frontendBalance}). Using backend balance.`);
+    }
+    // If frontendBalance === currentBackendBalance, effectiveBalance is already correct.
+  } else if (currentBackendBalance === undefined) {
+    // Player is new, and no valid frontendBalance was sent, default to 0.
+    console.log(`[API Server /api/ask-demon] New player ${playerId} with no valid frontendBalance. Initializing with 0 virtual sats.`);
+  }
+  // If player known and no frontendBalance, effectiveBalance remains currentBackendBalance.
+
+  playerBalances[playerId] = effectiveBalance; // Set the synchronized or initial balance
+
+  // Check player balance
+  if (playerBalances[playerId] < 1) {
+    console.log(`[API Server /api/ask-demon] Player ${playerId} has insufficient sats (${playerBalances[playerId]}).`);
+    return res.status(402).json({ // 402 Payment Required
+      error: "Not enough virtual sats. The demon demands payment! You need at least 1 sat.",
+      currentBalance: playerBalances[playerId]
+    });
+  }
+
+  // Deduct sats
+  playerBalances[playerId] -= 1;
+  console.log(`[API Server /api/ask-demon] Player ${playerId} paid 1 sat. New balance: ${playerBalances[playerId]}. Question: "${question}"`);
+
+
+  if (!process.env.GEMINI_API_KEY) {
+    console.error("[API Server /api/ask-demon] CRITICAL: GEMINI_API_KEY is not set.");
+    // Refund sat if Gemini call can't be made
+    playerBalances[playerId] += 1;
+    console.log(`[API Server /api/ask-demon] GEMINI_API_KEY not set. Refunding 1 sat to ${playerId}. New balance: ${playerBalances[playerId]}.`);
+    return res.status(500).json({ error: "Server configuration error: AI service is unavailable." });
+  }
+
+  const prompt = `You are a wise, slightly mischievous, but ultimately helpful demon.
+A player has asked you the following question: "${question}"
+
+Your task is to answer this question. However, you MUST adhere to the following rules:
+1.  Your knowledge is strictly limited to Bitcoin, the Lightning Network, and Lightning Service Providers (LSPs).
+2.  If the question is about any other topic, you must politely state that the topic is outside your domain of expertise and you cannot answer. For example, say something like: "Hah! A curious question, mortal, but alas, matters of [off-topic subject] are beyond my ken. I only deal in the arcane arts of Bitcoin, Lightning, and LSPs!"
+3.  If the question IS on-topic (Bitcoin, Lightning Network, LSPs), provide a helpful and friendly answer.
+4.  Keep your answer concise, ideally 2-3 short paragraphs.
+5.  Maintain a slightly mischievous, ancient, and wise demonic tone. For example, you might start with "Hmm, a seeker of knowledge, are we?" or "The ether whispers of such things..."
+
+Do not provide any preamble or explanation of these rules in your response. Just give the answer (or the polite refusal if off-topic) directly.`;
+
+  try {
+    const generationConfig = {
+      temperature: 0.7, // Adjust for desired creativity/factuality balance
+      maxOutputTokens: 2048, // Further increased token limit
+    };
+    const result = await model.generateContent({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig,
+    });
+    const response = await result.response;
+    let demonAnswer = ""; // Initialize
+    const candidate = response.candidates && response.candidates[0];
+
+    if (response.promptFeedback && response.promptFeedback.blockReason) {
+        console.warn(`[API Server /api/ask-demon] Prompt blocked by Gemini. Reason: ${response.promptFeedback.blockReason}`);
+        demonAnswer = `The demon recoils from your very query! (Issue: ${response.promptFeedback.blockReason})`;
+        if (response.promptFeedback.safetyRatings) {
+            console.log("[API Server /api/ask-demon] Prompt Safety Ratings:", JSON.stringify(response.promptFeedback.safetyRatings, null, 2));
+        }
+    } else if (candidate) {
+        demonAnswer = response.text(); // Helper for candidate.content.parts[0].text
+        console.log(`[API Server /api/ask-demon] Raw demonAnswer from Gemini: "${demonAnswer}"`);
+
+        const finishReason = candidate.finishReason;
+        const safetyRatings = candidate.safetyRatings;
+
+        if (finishReason && finishReason !== "STOP") {
+            console.warn(`[API Server /api/ask-demon] Gemini finishReason: ${finishReason}.`);
+            if (demonAnswer.trim() === "") { // If response is empty and finishReason is not STOP
+                demonAnswer = `The demon's words trail off into the ether... (Reason: ${finishReason})`;
+            }
+        }
+        
+        if (safetyRatings && safetyRatings.some(r => r.blocked || (r.probability && ['HIGH', 'MEDIUM'].includes(r.probability.toUpperCase())) )) {
+            // Check for 'blocked' or high/medium probability of harmful content
+            console.warn("[API Server /api/ask-demon] Gemini response has safety concerns:", JSON.stringify(safetyRatings, null, 2));
+            const concerningRating = safetyRatings.find(r => r.blocked || (r.probability && ['HIGH', 'MEDIUM'].includes(r.probability.toUpperCase())));
+            const category = concerningRating ? concerningRating.category : "UNKNOWN_SAFETY_CONCERN";
+            // If already blocked by finishReason='SAFETY', this might be redundant but provides more detail
+            if (demonAnswer.trim() === "" || finishReason === "SAFETY") {
+                demonAnswer = `The demon shudders, refusing to speak on such a matter (Concern: ${category}).`;
+            }
+        }
+
+        // If answer is still empty after all specific checks (e.g., finishReason was STOP but text was genuinely empty)
+        if (demonAnswer.trim() === "") {
+            console.warn("[API Server /api/ask-demon] Gemini returned an empty answer despite no explicit block or adverse finishReason/safetyRating.");
+            demonAnswer = "The demon stares blankly, offering no words. Perhaps the question was too mundane, or too profound?";
+        }
+    } else {
+        // This case means no candidates were returned and the prompt itself wasn't blocked. Highly unusual.
+        console.error("[API Server /api/ask-demon] No candidates found in Gemini response and no prompt block. This is unexpected.");
+        demonAnswer = "The demon seems to have vanished in a puff of arcane static!";
+    }
+
+    res.json({ answer: demonAnswer, newBalance: playerBalances[playerId] });
+
+  } catch (error) {
+    console.error("[API Server /api/ask-demon] Error during Gemini API call or processing:", error);
+    // Refund sat if Gemini call fails
+    playerBalances[playerId] += 1;
+    console.log(`[API Server /api/ask-demon] Gemini API processing error. Refunding 1 sat to ${playerId}. New balance: ${playerBalances[playerId]}.`);
+    
+    let errorMessage = "The demon is wrestling with arcane energies and cannot answer. Try again later.";
+    let errorDetails = error.message || "No specific details available.";
+
+    if (error.response && error.response.promptFeedback) {
+        console.error("[API Server /api/ask-demon] Gemini Prompt Feedback:", JSON.stringify(error.response.promptFeedback, null, 2));
+        errorMessage = "The demon found your query... problematic. (Prompt Feedback)";
+        errorDetails = JSON.stringify(error.response.promptFeedback);
+    } else if (error.message && error.message.toLowerCase().includes('api key not valid')) {
+        errorMessage = "The demon's source of knowledge is currently inaccessible (API key issue).";
+    } else if (error.message && error.message.toLowerCase().includes('quota')) {
+        errorMessage = "The demon has exhausted its daily allowance of whispers from the void (Quota Exceeded).";
+    }
+    
+    // Ensure we always send a JSON response
+    if (!res.headersSent) {
+        res.status(500).json({
+            error: errorMessage,
+            details: errorDetails,
+            fullError: error.stack, // Include stack for more detailed debugging if needed by server admin
+            newBalance: playerBalances[playerId]
+        });
+    } else {
+        console.error("[API Server /api/ask-demon] Headers already sent, could not send JSON error response.");
+    }
   }
 });
 
