@@ -208,6 +208,14 @@
             this.chatCloseButton = null;
             this.currentNpcChatTarget = null; // To remember which NPC we are chatting with
             this.currentPlayerId = "defaultPlayer"; // Hardcoded player ID for now
+
+            // --- Player Status Message UI State ---
+            this.playerStatusInputContainer = null;
+            this.playerStatusInput = null;
+            this.mobileChatOpenButton = null;
+            this.playerChatBubble = null;
+            this.statusInputVisible = false;
+            this.chatBubbleTimeout = null;
         }
 
         preload() {
@@ -235,6 +243,26 @@
             // --- Socket.IO Initialization ---
             this.socket = io('https://game-api-c2gn.onrender.com');
             this.otherPlayers = this.physics.add.group();
+
+            // Listen for new chat messages from the server
+            this.socket.on('newChatMessage', (data) => {
+                if (data.playerId && data.message) {
+                    if (data.playerId === this.socket.id) {
+                        // Optional: If server broadcasts back to sender and sender displays locally already,
+                        // you might ignore this or use it as confirmation.
+                        // For now, local display is handled by submitPlayerStatus.
+                        console.log("Received my own chat message back from server:", data.message);
+                    } else {
+                        // Message from another player
+                        const remotePlayerSprite = this.otherPlayers.getChildren().find(p => p.playerId === data.playerId);
+                        if (remotePlayerSprite) {
+                            this.displayChatBubble(remotePlayerSprite, data.message);
+                        } else {
+                            console.log("Chat message from unknown remote player:", data.playerId);
+                        }
+                    }
+                }
+            });
 
             // --- Background Music ---
             this.music = this.sound.add('background_music', { loop: true, volume: 0.5 });
@@ -460,6 +488,67 @@
                 strokeThickness: 6
             }).setOrigin(0.5).setVisible(false).setDepth(10); // High depth to appear on top
 
+            // --- Player Status Message UI Elements & Event Listeners ---
+            this.playerStatusInputContainer = document.getElementById('player-status-input-container');
+            this.playerStatusInput = document.getElementById('player-status-input');
+            this.mobileChatOpenButton = document.getElementById('mobile-chat-open-button');
+            this.playerChatBubble = document.getElementById('player-chat-bubble');
+
+            if (this.playerStatusInputContainer && this.playerStatusInput && this.mobileChatOpenButton && this.playerChatBubble) {
+                // Listener for 'C' key to toggle status input
+                this.input.keyboard.on('keydown-C', () => {
+                    console.log("'C' key pressed in GameScene listener. Timestamp: ", Date.now());
+                    if (this.statusInputVisible) { // If input is currently VISIBLE, then HIDE it
+                        this.playerStatusInputContainer.style.display = 'none';
+                        this.statusInputVisible = false;
+                        if (this.input.keyboard) this.input.keyboard.enableGlobalCapture();
+                        if (this.sys.game.canvas) this.sys.game.canvas.focus();
+                        console.log("Player status input hidden via C key, Phaser keyboard capture enabled.");
+                    } else { // If input is currently HIDDEN, then SHOW it
+                        if (this.showingChatUI || this.quizIsActive || this.showingKnowledgeUI || this.showingQuizPromptUI) {
+                            console.log("Player status input blocked by other UI (C key).");
+                            return;
+                        }
+                        this.playerStatusInputContainer.style.display = 'block';
+                        this.playerStatusInput.focus();
+                        this.statusInputVisible = true;
+                        if (this.input.keyboard) this.input.keyboard.disableGlobalCapture();
+                        console.log("Player status input visible via C key, Phaser keyboard capture disabled.");
+                    }
+                });
+
+                // Listener for mobile chat open button
+                this.mobileChatOpenButton.addEventListener('click', () => {
+                    if (this.statusInputVisible) {
+                        this.playerStatusInputContainer.style.display = 'none';
+                        this.statusInputVisible = false;
+                        if (this.input.keyboard) this.input.keyboard.enableGlobalCapture();
+                        if (this.sys.game.canvas) this.sys.game.canvas.focus();
+                        console.log("Player status input hidden via mobile button, Phaser keyboard capture enabled.");
+                    } else {
+                         // Prevent showing input if other major UI is active
+                        if (this.showingChatUI || this.quizIsActive || this.showingKnowledgeUI || this.showingQuizPromptUI) {
+                            console.log("Player status input blocked by other UI.");
+                            return;
+                        }
+                        this.playerStatusInputContainer.style.display = 'block';
+                        this.playerStatusInput.focus();
+                        this.statusInputVisible = true;
+                        if (this.input.keyboard) this.input.keyboard.disableGlobalCapture();
+                        console.log("Player status input visible via mobile button, Phaser keyboard capture disabled.");
+                    }
+                });
+
+                // Listener for 'Enter' key in status input field
+                this.playerStatusInput.addEventListener('keydown', (event) => {
+                    if (event.key === 'Enter') {
+                        event.preventDefault();
+                        this.submitPlayerStatus();
+                    }
+                });
+            } else {
+                console.error("One or more player status UI elements are missing from the DOM!");
+            }
 
             // --- Load Initial Question ---
             // this.loadQuestion(0, 0); // REMOVED - Quiz now starts via NPC interaction
@@ -561,23 +650,40 @@
 
         update() {
             const speed = 160;
-            const interactionRange = 50; // Max distance to show interaction prompt
-            const uiCloseRange = 100; // Max distance before UI closes automatically
+            const interactionRange = 50;
+            const uiCloseRange = 100;
 
-            if (this.showingChatUI || this.gamePausedForChat) {
-                if (this.player) {
-                    this.player.setVelocity(0); // Explicitly stop player
-                }
-                // Phaser keyboard input is disabled/enabled in showChatUI/hideChatUI.
+            if (!this.player || !this.cursors) return;
+
+            // Determine if player movement should be blocked
+            // Movement is blocked if an HTML input likely has focus, or game is explicitly paused for chat.
+            // quizIsActive (actual quiz questions) NO LONGER blocks movement here, to allow moving to answer zones.
+            const blockMovement = this.showingChatUI || this.gamePausedForChat || this.statusInputVisible;
+
+            if (blockMovement) {
+                this.player.setVelocity(0, 0);
+            } else {
+                // Player Movement
+                this.player.setVelocity(0,0);
+                let dx = 0;
+                let dy = 0;
+                if ((this.cursors && this.cursors.left.isDown) || this.touchFlags.left) dx = -1;
+                else if ((this.cursors && this.cursors.right.isDown) || this.touchFlags.right) dx = 1;
+                if ((this.cursors && this.cursors.up.isDown) || this.touchFlags.up) dy = -1;
+                else if ((this.cursors && this.cursors.down.isDown) || this.touchFlags.down) dy = 1;
+                
+                this.player.setVelocityX(dx * speed);
+                this.player.setVelocityY(dy * speed);
+                if (dx !== 0 && dy !== 0) this.player.body.velocity.normalize().scale(speed);
             }
-
-            // --- Interaction Logic ---
+            
+            // --- Interaction Logic (Finding closest NPC) ---
             let currentClosestNpc = null;
-            // Only check for new interactions if no UI is open and no quiz/chat is active
-            if (!this.showingKnowledgeUI && !this.showingQuizPromptUI && !this.quizIsActive && !this.showingChatUI) {
+            // Only search for NPCs if no input field has focus and not in an active quiz session
+            if (!this.statusInputVisible && !this.showingChatUI && !this.quizIsActive) {
                  let minDist = interactionRange;
                  this.npcs.forEach(npc => {
-                    if (npc.sprite) { // Ensure sprite exists
+                    if (npc.sprite) {
                         const distance = Phaser.Math.Distance.Between(this.player.x, this.player.y, npc.sprite.x, npc.sprite.y);
                         if (distance < minDist) {
                             minDist = distance;
@@ -586,97 +692,94 @@
                     }
                 });
                  this.closestNpc = currentClosestNpc;
+            } else { // If input field has focus or in active quiz, no new NPC should be targeted
+                this.closestNpc = null;
             }
-            // If a UI is showing or quiz/chat is active, this.closestNpc retains its value from the last valid check
 
             // Show/Hide Interaction Prompt
-            if (this.closestNpc && !this.showingKnowledgeUI && !this.showingQuizPromptUI && !this.quizIsActive && !this.showingChatUI) {
-                this.interactionPromptText.setPosition(this.player.x, this.player.y - 30).setVisible(true);
+            // Prompt visible if an NPC is close AND no UI is taking precedence (knowledge, quiz prompt, chat, status input, active quiz)
+            if (this.closestNpc &&
+                !this.showingKnowledgeUI && !this.showingQuizPromptUI &&
+                !this.quizIsActive && !this.showingChatUI && !this.gamePausedForChat &&
+                !this.statusInputVisible) {
+                if(this.interactionPromptText) this.interactionPromptText.setPosition(this.player.x, this.player.y - 30).setText('Press E to interact').setVisible(true);
             } else {
-                this.interactionPromptText.setVisible(false);
+                if(this.interactionPromptText) this.interactionPromptText.setVisible(false);
             }
 
-            // Handle 'E' Key Press or Touch Interact
+            // Handle 'E' Key Press or Touch Interact for NPC interactions
             const justPressedE = Phaser.Input.Keyboard.JustDown(this.interactKey);
             const justTouchedInteract = this.touchFlags.interactPressed;
 
-            if ((justPressedE || justTouchedInteract) && !this.showingChatUI) { // Ensure chat is not active for these game interactions
-                if (this.showingQuizPromptUI && this.currentNpcInteraction) {
+            // Allow interaction if E is pressed AND
+            // ( (QuizPrompt is showing AND we have a currentNpcInteraction) OR
+            //   (KnowledgeUI is showing) OR
+            //   (a closestNpc is found AND no other major UI is active) )
+            // AND not typing in NPC chat or player status.
+            if ((justPressedE || justTouchedInteract) && !this.showingChatUI && !this.statusInputVisible) {
+                if (this.showingQuizPromptUI && this.currentNpcInteraction) { // Handles starting quiz from prompt
                     this.startQuiz(this.currentNpcInteraction.dataId);
-                } else if (this.showingKnowledgeUI) {
+                } else if (this.showingKnowledgeUI) { // Handles closing knowledge UI
                      this.hideAllNpcUI();
-                } else if (this.closestNpc) { // Already implies no other UI is active due to the !this.showingChatUI check
+                } else if (this.closestNpc && !this.quizIsActive && !this.showingKnowledgeUI && !this.showingQuizPromptUI) { // Handles initiating interaction
                     this.handleNpcInteraction(this.closestNpc);
                 }
             }
 
-            // Reset single-frame touch flags
             if (this.touchFlags.interactPressed) {
                 this.touchFlags.interactPressed = false;
             }
 
-            // --- UI Auto-Close Logic ---
-            if ((this.showingKnowledgeUI || this.showingQuizPromptUI || this.showingChatUI) && this.currentNpcInteraction && this.currentNpcInteraction.sprite) {
+            // --- UI Auto-Close Logic (if player moves away) ---
+            // This requires player to be able to move while showingKnowledgeUI or showingQuizPromptUI is true.
+            if ((this.showingKnowledgeUI || this.showingQuizPromptUI) && this.currentNpcInteraction && this.currentNpcInteraction.sprite) {
                  const distanceToCurrentNpc = Phaser.Math.Distance.Between(
                      this.player.x, this.player.y,
                      this.currentNpcInteraction.sprite.x, this.currentNpcInteraction.sprite.y
                  );
                  if (distanceToCurrentNpc > uiCloseRange) {
-                     if (this.showingKnowledgeUI || this.showingQuizPromptUI) {
-                        this.hideAllNpcUI();
-                     }
-                     if (this.showingChatUI) {
-                        this.hideChatUI();
-                     }
+                     this.hideAllNpcUI(); // This closes knowledge or quiz prompt
                  }
             }
-
-            // --- Player Movement ---
-            if (!this.showingChatUI && !this.gamePausedForChat) {
-                if (this.player) {
-                    this.player.setVelocity(0); // Reset velocity at the start of movement logic
-
-                    let dx = 0;
-                    let dy = 0;
-
-                    if ((this.cursors && this.cursors.left.isDown) || this.touchFlags.left) {
-                        dx = -1;
-                    } else if ((this.cursors && this.cursors.right.isDown) || this.touchFlags.right) {
-                        dx = 1;
-                    }
-
-                    if ((this.cursors && this.cursors.up.isDown) || this.touchFlags.up) {
-                        dy = -1;
-                    } else if ((this.cursors && this.cursors.down.isDown) || this.touchFlags.down) {
-                        dy = 1;
-                    }
-
-                    this.player.setVelocityX(dx * speed);
-                    this.player.setVelocityY(dy * speed);
-
-                    // Normalize and scale the velocity if moving diagonally
-                    if (dx !== 0 && dy !== 0) {
-                        this.player.body.velocity.normalize().scale(speed);
-                    }
-
-                    // --- Emit Player Movement ---
-                    if (this.socket) {
-                        const x = this.player.x;
-                        const y = this.player.y;
-                        if (!this.player.oldPosition || x !== this.player.oldPosition.x || y !== this.player.oldPosition.y) {
-                            this.socket.emit('playerMovement', { x: x, y: y });
-                            this.player.oldPosition = { x: x, y: y };
-                        }
-                    } else if (this.player.oldPosition === undefined) { // Initialize if not set
-                         this.player.oldPosition = { x: this.player.x, y: this.player.y };
-                    }
+            // Auto-close for NPC chat UI (if player moves away)
+            if (this.showingChatUI && this.currentNpcChatTarget && this.currentNpcChatTarget.sprite) {
+                const distanceToCurrentChatNpc = Phaser.Math.Distance.Between(
+                    this.player.x, this.player.y,
+                    this.currentNpcChatTarget.sprite.x, this.currentNpcChatTarget.sprite.y
+                );
+                if (distanceToCurrentChatNpc > uiCloseRange) {
+                    this.hideChatUI();
                 }
-            } else if (this.player) { // If chat is active or game paused, ensure velocity is zero
-                this.player.setVelocity(0);
-                if (this.player.oldPosition) { // Keep oldPosition in sync to prevent jumps
-                    this.player.oldPosition.x = this.player.x;
-                    this.player.oldPosition.y = this.player.y;
+            }
+
+
+            // --- Emit Player Movement ---
+            if (this.socket && this.player) { // Ensure socket and player exist
+                const x = this.player.x;
+                const y = this.player.y;
+                if (!this.player.oldPosition || x !== this.player.oldPosition.x || y !== this.player.oldPosition.y) {
+                    this.socket.emit('playerMovement', { x: x, y: y });
+                    this.player.oldPosition = { x: x, y: y };
                 }
+            } else if (this.player && this.player.oldPosition === undefined) {
+                 this.player.oldPosition = { x: this.player.x, y: this.player.y };
+            }
+            
+            // --- Update Player Chat Bubble Position ---
+            if (this.playerChatBubble && this.playerChatBubble.style.display === 'block' && this.player && this.cameras.main) {
+                // Get player's position relative to the camera viewport
+                const screenX = this.player.x - this.cameras.main.scrollX;
+                const screenY = this.player.y - this.cameras.main.scrollY;
+                
+                // screenPoint is now effectively { x: screenX, y: screenY }
+                // No explicit check for screenPoint needed as calculations are direct
+                const bubbleWidth = this.playerChatBubble.offsetWidth || 150;
+                    this.playerChatBubble.style.left = (screenX - bubbleWidth / 2) + 'px';
+                    const bubbleHeight = this.playerChatBubble.offsetHeight || 30;
+                    const playerSpriteHeight = this.player.displayHeight;
+                    const bubbleOffsetY = (playerSpriteHeight / 2) + bubbleHeight + 10;
+                    this.playerChatBubble.style.top = (screenY - bubbleOffsetY) + 'px';
+                // Removed the else block as direct calculation doesn't produce an invalid screenPoint in the same way
             }
         }
 
@@ -1015,6 +1118,10 @@
             if (this.input && this.input.keyboard) {
                 this.input.keyboard.enableGlobalCapture();
                 console.log('Phaser global keyboard capture ENABLED after chat.');
+                if (this.sys.game.canvas) { // Attempt to refocus the game canvas
+                    this.sys.game.canvas.focus();
+                    console.log('Attempted to focus game canvas after chat.');
+                }
             } else {
                 console.warn('Phaser input system or keyboard not available in hideChatUI for enabling global capture.');
             }
@@ -1133,6 +1240,80 @@
             if (this.chatHistoryDiv) {
                 this.chatHistoryDiv.innerHTML = '';
             }
+        }
+// --- Player Status Message Logic ---
+        submitPlayerStatus() {
+            if (!this.playerStatusInput || !this.playerStatusInputContainer) return;
+
+            const chatText = this.playerStatusInput.value.trim();
+            if (chatText.length > 0 && chatText.length <= 30) {
+                // Display bubble locally first
+                this.displayChatBubble(this.player, chatText); // MODIFIED CALL for local player
+
+                // Send to server
+                if (this.socket && this.socket.connected) {
+                    this.socket.emit('chatMessage', { playerId: this.socket.id, message: chatText });
+                    console.log(`Player status submitted to server: ${chatText}`);
+                } else {
+                    console.error("Socket not connected, cannot send chat message.");
+                }
+
+                // Clear input and hide
+                this.playerStatusInput.value = '';
+                this.playerStatusInputContainer.style.display = 'none';
+                this.statusInputVisible = false;
+                if (this.input.keyboard) this.input.keyboard.enableGlobalCapture();
+                if (this.sys.game.canvas) this.sys.game.canvas.focus();
+            } else if (chatText.length > 30) {
+                // Optionally, provide feedback if message is too long
+                alert("Chat message is too long (max 30 characters).");
+            } else {
+                // Just hide if empty
+                this.playerStatusInputContainer.style.display = 'none';
+                this.statusInputVisible = false;
+                if (this.input.keyboard) this.input.keyboard.enableGlobalCapture();
+                if (this.sys.game.canvas) this.sys.game.canvas.focus();
+            }
+        }
+
+        displayChatBubble(targetSprite, message) { // MODIFIED SIGNATURE
+            if (!this.playerChatBubble || !targetSprite) return; // Ensure elements and target exist
+
+            // Sanitize message to prevent HTML injection if it's not already handled
+            // For simplicity, assuming message is plain text. Proper sanitization is important.
+            const sanitizedMessage = message;
+
+            this.playerChatBubble.innerHTML = sanitizedMessage;
+            this.playerChatBubble.style.display = 'block';
+
+            // Calculate position based on targetSprite's world coordinates
+            // Convert targetSprite's world position to screen coordinates
+            const cam = this.cameras.main;
+            // Ensure targetSprite has x and y properties (Phaser Sprites do)
+            const targetScreenX = (targetSprite.x - cam.scrollX * cam.zoom) * cam.zoom;
+            const targetScreenY = (targetSprite.y - cam.scrollY * cam.zoom) * cam.zoom;
+
+            // Position bubble above the targetSprite
+            // Adjust these offsets as needed
+            const bubbleOffsetX = this.playerChatBubble.offsetWidth / 2;
+            // Ensure offsetHeight is read after content is set and displayed for accurate measurement
+            // It might be better to set a fixed height or use a more robust measurement
+            const bubbleOffsetY = this.playerChatBubble.offsetHeight + 10; // 10px above targetSprite
+
+            this.playerChatBubble.style.left = `${targetScreenX - bubbleOffsetX}px`;
+            this.playerChatBubble.style.top = `${targetScreenY - bubbleOffsetY}px`;
+
+            // Clear existing timeout if any
+            if (this.chatBubbleTimeout) {
+                clearTimeout(this.chatBubbleTimeout);
+            }
+
+            // Hide bubble after a delay (e.g., 3 seconds)
+            this.chatBubbleTimeout = setTimeout(() => {
+                if (this.playerChatBubble) { // Check if it still exists
+                    this.playerChatBubble.style.display = 'none';
+                }
+            }, 3000); // 3000 milliseconds = 3 seconds
         }
 
         async startQuiz(quizId) {

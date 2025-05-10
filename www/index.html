@@ -51,5 +51,15 @@
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/phaser@3.88.2/dist/phaser.min.js"></script>
         <script type="text/javascript" src="js/index.js"></script>
+<!-- Player Status Message UI -->
+        <div id="player-status-elements-container">
+            <div id="player-status-input-container" style="display: none; position: fixed; bottom: 50px; left: 50%; transform: translateX(-50%); z-index: 1001; background-color: #fff; padding: 10px; border-radius: 5px; box-shadow: 0 0 10px rgba(0,0,0,0.5);">
+                <input type="text" id="player-status-input" maxlength="30" placeholder="Status (30 chars max)" style="padding: 8px; border-radius: 3px; border: 1px solid #ccc;">
+            </div>
+            <div id="mobile-chat-open-button" style="position: fixed; bottom: 20px; right: 20px; z-index: 1001; width: 60px; height: 60px; background-color: #007bff; color: white; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 28px; box-shadow: 0 2px 8px rgba(0,0,0,0.2); user-select: none;">💬</div>
+            <div id="player-chat-bubble" style="display: none; position: absolute; background-color: rgba(30, 30, 30, 0.85); color: white; padding: 8px 12px; border-radius: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.3); z-index: 1002; max-width: 180px; text-align: center; word-wrap: break-word; font-size: 13px;">
+                <!-- Message will be injected here by JS -->
+            </div>
+        </div>
     </body>
 </html>

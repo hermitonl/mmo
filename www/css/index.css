@@ -113,3 +113,80 @@ h1 {
     animation:fade 3000ms infinite;
     -webkit-animation:fade 3000ms infinite;
 }
+
+/* Player Status Message UI Styles */
+#player-status-elements-container {
+    /* Container for logical grouping, no specific styles needed here */
+}
+
+#player-status-input-container {
+    /* Styles are applied inline in HTML for initial setup, can be moved here */
+    /* Example:
+    display: none; 
+    position: fixed;
+    bottom: 50px; 
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1001;
+    background-color: #fff;
+    padding: 10px;
+    border-radius: 5px;
+    box-shadow: 0 0 10px rgba(0,0,0,0.5);
+    */
+}
+
+#player-status-input {
+    /* Styles are applied inline in HTML for initial setup, can be moved here */
+    /* Example:
+    padding: 8px;
+    border-radius: 3px;
+    border: 1px solid #ccc;
+    width: 250px; 
+    max-width: 80vw; 
+    font-size: 14px;
+    */
+}
+
+#mobile-chat-open-button {
+    /* Styles for the DIV-based icon button, already set inline in HTML */
+    /* These are the styles from the HTML:
+    position: fixed; 
+    bottom: 20px; 
+    right: 20px; 
+    z-index: 1001; 
+    width: 60px; 
+    height: 60px; 
+    background-color: #007bff; 
+    color: white; 
+    border-radius: 50%; 
+    cursor: pointer; 
+    display: flex; 
+    align-items: center; 
+    justify-content: center; 
+    font-size: 28px; 
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    user-select: none;
+    */
+}
+
+#mobile-chat-open-button:hover {
+    background-color: #0056b3; /* Darken on hover */
+}
+
+#player-chat-bubble {
+    /* Styles are applied inline in HTML for initial setup, can be moved here */
+    /* Example:
+    display: none; 
+    position: absolute; 
+    background-color: rgba(30, 30, 30, 0.85); 
+    color: white;
+    padding: 8px 12px;
+    border-radius: 20px; 
+    box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+    z-index: 1002;
+    max-width: 180px; 
+    text-align: center;
+    word-wrap: break-word; 
+    font-size: 13px;
+    */
+}

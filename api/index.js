@@ -171,8 +171,31 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Listen for chat messages
+  socket.on('chatMessage', (data) => {
+    if (typeof data.message !== 'string' || typeof data.playerId !== 'string') {
+      console.log(`[API Server] Invalid chat message data received from ${socket.id}:`, data);
+      return;
+    }
+
+    const message = data.message.trim();
+    const playerId = data.playerId;
+
+    // Validate message length (max 30 chars)
+    if (message.length === 0 || message.length > 30) {
+      console.log(`[API Server] Chat message from ${playerId} rejected due to length: ${message.length} chars.`);
+      // Optionally, send a notice back to the sender
+      // socket.emit('chatError', { message: 'Message must be between 1 and 30 characters.' });
+      return;
+    }
+
+    console.log(`[API Server] Chat message received from ${playerId} (${socket.id}): ${message}`);
+    // Broadcast the chat message to all connected clients, including the sender
+    io.emit('newChatMessage', { playerId: playerId, message: message });
+  });
+
   // Add more game-specific event handlers here
-  // e.g., for quiz interactions, chat messages, etc.
+  // e.g., for quiz interactions, etc.
 });
 
 // Basic route for testing if the server is up (optional)
