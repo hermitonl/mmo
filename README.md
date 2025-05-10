@@ -1,7 +1,5 @@
 # Bitcoin Quest: A Top-Down Quiz Adventure! (Phaser 3 + Cordova + Gemini AI)
 
-![screenshot](screenshot.png)
-
 Embark on **Bitcoin Quest**, a retro-inspired, top-down educational game where learning about Bitcoin is an exciting adventure! Built with Phaser 3, Apache Cordova, and powered by Google's Gemini AI for dynamic quiz generation and NPC interactions, this game challenges your knowledge of Bitcoin concepts through interactive gameplay, engaging NPC interactions, and timed quizzes. Dive into a pixel-art world and earn Satoshis as you master the fundamentals of Bitcoin.
 
 This project was developed for the **Amazon Q Developer "Quack The Code" Challenge**, aiming to showcase innovation in entertainment, explore new development possibilities, and leverage AI for a smarter workflow.
@@ -10,9 +8,11 @@ This project was developed for the **Amazon Q Developer "Quack The Code" Challen
 
 Ready to test your Bitcoin knowledge? Play the latest version here:
 *   **Multiplayer Link (Render.com):** [https://mmo.hermit.onl/](https://mmo.hermit.onl/)
-*   **Backup (Render):** [https://game-client-7p87.onrender.com/](https://game-client-7p87.onrender.com/) (This is the original game client.)
+*   **Backup (Render):** [https://game-client-7p87.onrender.com/](https://game-client-7p87.onrender.com/) 
 *   **Old Link (Vercel - Single Player):** [https://play.hermit.onl/](https://play.hermit.onl/) (Archived/Older Single-Player Version)
 *   Backup Link (Vercel): [https://phaser-beta.vercel.app/](https://phaser-beta.vercel.app/)
+
+![hermitONL v0.3 Bitcoin Phaser 3 Game](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/11hwxol2tqj0issloxyo.png)
 
 ## Key Features
 
