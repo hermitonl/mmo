@@ -25,6 +25,10 @@ Ready to test your Bitcoin knowledge? Play the latest version here:
 *   **Cross-Platform Potential:** Built with Cordova for web deployment and future mobile possibilities.
 *   **Basic Multiplayer:** See other players move in real-time using Socket.IO.
 *   **Educational Focus:** Designed to make learning complex Bitcoin topics fun and accessible for everyone.
+*   **Multiplayer Chat Bubbles:** Communicate with other players in real-time!
+    *   Press 'C' on desktop or tap the chat icon on mobile to open the chat input.
+    *   Type your message (up to 30 characters).
+    *   Your message will appear as a bubble above your character, visible to nearby players.
 
 ## AI-Powered Bitcoin Quiz
 
